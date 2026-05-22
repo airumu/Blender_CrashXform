@@ -20,7 +20,8 @@ from . import export_scenery
 importlib.reload(export_scenery)
 
 DEFAULT_ID = 10
-MAX_ARGS = 20
+MAX_ARGS = 12
+MAX_CAMERAS = 5
 
 class EntityProps(PropertyGroup):
     set_zone: StringProperty(
@@ -71,6 +72,17 @@ class EntityProps(PropertyGroup):
         options={'SKIP_SAVE'}
     )
 
+    # camera properties
+
+    cam_count: IntProperty(
+        name="Instances:",
+        description="Set the number of camera elements.\nShould match the number defined by the name.",
+        default=0,
+        min=0,
+        max=MAX_CAMERAS,
+        options={'SKIP_SAVE'}
+    )
+
 def make_hex_getter(index):
     def getter(self):
         value = getattr(self, f"value_{index}")
@@ -98,7 +110,28 @@ def make_hex_setter(index):
 
     return setter
 
+def make_camera_hex_getter(index, prop_name):
+    def getter(self):
+        value = getattr(self, f"{prop_name}_value_{index}")
+        value &= 0xFFFFFFFF
+        return hex(value)
+    return getter
+
+def make_camera_hex_setter(index, prop_name):
+    def setter(self, text):
+        try:
+            value = int(text, 16)
+            if value >= 0x80000000:
+                value -= 0x100000000
+            setattr(self, f"{prop_name}_value_{index}", value)
+        except ValueError:
+            pass
+    return setter
+
 class Arguments(PropertyGroup):
+    pass
+
+class CameraElements(PropertyGroup):
     pass
 
 # Generation
@@ -111,6 +144,92 @@ for i in range(MAX_ARGS):
         name=f"Arg {i + 1}",
         get=make_hex_getter(i),
         set=make_hex_setter(i)
+    )
+
+# Camera elements generation
+for i in range(MAX_CAMERAS):
+    # Mode enum
+    CameraElements.__annotations__[f"mode_{i}"] = EnumProperty(
+        name="Mode",
+        description="In-game camera mode",
+        items=[
+            ("AUTO", "Auto", ""),
+            ("Regular (3D)", "Regular (3D)", ""),
+            ("Sidescrolling (2D)", "Sidescrolling (2D)", ""),
+            ("VERTICAL", "Vertical", ""),
+            ("CUTSCENE", "Cutscene", ""),
+        ],
+        default="AUTO"
+    )
+    
+    # PanningX
+    CameraElements.__annotations__[f"Panningx_enabled_{i}"] = BoolProperty(
+        name="Panning X",
+        description="Camera panning - horizontal",
+        default=False
+    )
+    CameraElements.__annotations__[f"Panningx_value_{i}"] = IntProperty(
+        default=0x40
+    )
+    CameraElements.__annotations__[f"Panningx_hex_{i}"] = StringProperty(
+        name=f"",
+        get=make_camera_hex_getter(i, "Panningx"),
+        set=make_camera_hex_setter(i, "Panningx")
+    )
+    
+    # PanningY
+    CameraElements.__annotations__[f"Panningy_enabled_{i}"] = BoolProperty(
+        name="Panning Y",
+        description="Camera panning - vertical",
+        default=False
+    )
+    CameraElements.__annotations__[f"Panningy_value_{i}"] = IntProperty(
+        default=0x40
+    )
+    CameraElements.__annotations__[f"Panningy_hex_{i}"] = StringProperty(
+        name=f"",
+        get=make_camera_hex_getter(i, "Panningy"),
+        set=make_camera_hex_setter(i, "Panningy")
+    )
+    
+    # Distance
+    CameraElements.__annotations__[f"distance_enabled_{i}"] = BoolProperty(
+        name="Distance",
+        description="Camera-player distance\n(Can be applied separately to the first/last point of a zone-path)",
+        default=False
+    )
+    CameraElements.__annotations__[f"distance_value_{i}"] = IntProperty(
+        default=0x600
+    )
+    CameraElements.__annotations__[f"distance_hex_{i}"] = StringProperty(
+        name=f"",
+        get=make_camera_hex_getter(i, "distance"),
+        set=make_camera_hex_setter(i, "distance")
+    )
+    
+    # Spacing
+    CameraElements.__annotations__[f"spacing_enabled_{i}"] = BoolProperty(
+        name="Spacing",
+        description="Point spacing for interpolation",
+        default=False
+    )
+    CameraElements.__annotations__[f"spacing_{i}"] = IntProperty(
+        name=f"",
+        default=200,
+        min=0,
+        max=65535
+    )
+    
+    # Interpolate
+    CameraElements.__annotations__[f"interpolate_{i}"] = EnumProperty(
+        name="Interp",
+        description="Override default interpolation setting",
+        items=[
+            ("AUTO", "Auto", ""),
+            ("INTERPOLATE", "Interpolate", ""),
+            ("DONT INTERPOLATE", "Don't interpolate", ""),
+        ],
+        default="AUTO"
     )
 
 # Panels
@@ -165,6 +284,75 @@ class CXF_PT_prop(Panel):
         for i in range(props.prop_arg_count):
             box.prop(obj.arguments, f"hex_{i}")
         layout.separator()
+
+class CXF_PT_camera(Panel):
+    bl_label = "Camera Properties"
+    bl_space_type = "VIEW_3D"
+    bl_region_type = "UI"
+    bl_category = "CSNvision"
+
+    def draw_header(self, context):
+        layout = self.layout
+        layout.label(icon='CAMERA_DATA')
+
+    def draw(self, context):
+        layout = self.layout
+        obj = context.object
+
+        if obj is None:
+            layout.label(text="No object selected")
+            return
+
+        props = obj.entity_props
+
+        # camera count
+        layout.use_property_split = True
+        layout.prop(props, "cam_count")
+        layout.use_property_split = False
+
+        # cameras
+        box = layout.box()
+        for i in range(props.cam_count):
+            col = box.column()
+            col.label(text=f"Instance {i + 1}", icon='CAMERA_DATA')
+            
+            # Mode
+            row = col.row(align=True)            
+            row.prop(obj.camera_elements, f"mode_{i}")            
+            
+            # Distance
+            row = col.row(align=True)
+            row.prop(obj.camera_elements, f"distance_enabled_{i}")
+            sub = row.column()
+            sub.enabled = getattr(obj.camera_elements, f"distance_enabled_{i}")
+            sub.prop(obj.camera_elements, f"distance_hex_{i}")
+            
+            # PanningX
+            row = col.row(align=True)
+            row.prop(obj.camera_elements, f"Panningx_enabled_{i}")
+            sub = row.column()
+            sub.enabled = getattr(obj.camera_elements, f"Panningx_enabled_{i}")
+            sub.prop(obj.camera_elements, f"Panningx_hex_{i}")
+            
+            # PanningY
+            row = col.row(align=True)
+            row.prop(obj.camera_elements, f"Panningy_enabled_{i}")
+            sub = row.column()
+            sub.enabled = getattr(obj.camera_elements, f"Panningy_enabled_{i}")
+            sub.prop(obj.camera_elements, f"Panningy_hex_{i}")
+            
+            # Interpolate            
+            col.prop(obj.camera_elements, f"interpolate_{i}")            
+            
+            # Spacing
+            row = col.row(align=True)
+            row.prop(obj.camera_elements, f"spacing_enabled_{i}")
+            sub = row.column()
+            sub.enabled = getattr(obj.camera_elements, f"spacing_enabled_{i}")
+            sub.prop(obj.camera_elements, f"spacing_{i}")
+            
+            col.separator()
+            
 
 class CXF_PT_tools(Panel):
     bl_label = "Utilities"

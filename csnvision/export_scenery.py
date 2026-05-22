@@ -92,6 +92,9 @@ def export_mesh(obj, depsgraph):
             else None
         )
 
+        if mat is not None:
+            face["material"] = mat.name 
+
         texture = get_texture_name(mat)
         if texture is not None:
             face["texture"] = texture
@@ -164,20 +167,78 @@ def export_camera(obj):
     else:
         prefixed = obj.name
 
-    return {
+    camera_info = export_camera_info(obj)
+
+    data = {
         "name":       prefixed,
         "pos":        yup_pos(pos),
         "rot":        yup_euler_deg(euler),
     }
 
+    if camera_info is not None:
+        data["camera_info"] = camera_info
+
+    return data
+
+# camera info export
+
+def export_camera_info(obj):
+    if not hasattr(obj, "entity_props") or not hasattr(obj, "camera_elements"):
+        return []
+
+    count = getattr(obj.entity_props, "cam_count", 0)
+    if count <= 0:
+        return []
+
+    elements = []
+    for i in range(count):
+        enabled_panningx = getattr(obj.camera_elements, f"Panningx_enabled_{i}", False)
+        enabled_panningy = getattr(obj.camera_elements, f"Panningy_enabled_{i}", False)
+        enabled_distance = getattr(obj.camera_elements, f"distance_enabled_{i}", False)
+        enabled_spacing = getattr(obj.camera_elements, f"spacing_enabled_{i}", False)
+
+        panningx_val = getattr(obj.camera_elements, f"Panningx_value_{i}", 0)
+        panningy_val = getattr(obj.camera_elements, f"Panningy_value_{i}", 0)
+        distance_val = getattr(obj.camera_elements, f"distance_value_{i}", 0)
+        spacing_val = getattr(obj.camera_elements, f"spacing_{i}", 0)
+        
+        elements.append({
+            "mode": getattr(obj.camera_elements, f"mode_{i}", None),
+            "panningx": panningx_val & 0xFFFFFFFF if enabled_panningx else None,
+            "panningy": panningy_val & 0xFFFFFFFF if enabled_panningy else None,
+            "distance": distance_val & 0xFFFFFFFF if enabled_distance else None,
+            "spacing": spacing_val if enabled_spacing else None,
+            "interpolate": getattr(obj.camera_elements, f"interpolate_{i}", None),
+        })
+
+    return elements
+
+# camera curve export
+def export_camera_curve(obj, depsgraph):    
+    collections = [c.name for c in obj.users_collection
+                   if c.name != "Scene Collection"]
+    for collection in collections:
+        if collection.startswith('entities'):
+            return None
+        
+    collection_name = collections[0] if collections else None
+    
+    curve_points = get_curve_points([obj], depsgraph)
+    positions = [yup_pos(p) for p in curve_points]
+    
+    data = {
+        "pathid": collection_name,
+        "positions": positions
+    }
+    return data
 
 # entity export
-def export_entity(obj, context):
+def export_entity(obj, depsgraph):
     world_mat = obj.matrix_world
     pos = world_mat.translation
     props = obj.entity_props
 
-    curve_points = get_curve_points(obj)
+    curve_points = get_curve_points(obj.children, depsgraph)
     base_points = curve_points or [pos]
     positions = [yup_pos(p) for p in base_points]
 
@@ -196,24 +257,20 @@ def export_entity(obj, context):
 
     return data
 
-def get_curve_points(parent_obj):
+def get_curve_points(children, depsgraph):
     points_world = []
-    for child in parent_obj.children:
+    for child in children:
         if child.type != 'CURVE':
             continue
 
-        curve = child.data
-        for spline in curve.splines:
+        # Evaluate the curve so resolution_u is applied
+        child_eval = child.evaluated_get(depsgraph)
+        mesh = child_eval.to_mesh()
 
-            # BEZIER
-            if spline.type == 'BEZIER':
-                for bp in spline.bezier_points:
-                    points_world.append(child.matrix_world @ bp.co)
+        for v in mesh.vertices:
+            points_world.append(child.matrix_world @ v.co)
 
-            # POLY / NURBS
-            else:
-                for p in spline.points:
-                    points_world.append(child.matrix_world @ p.co.xyz)
+        child_eval.to_mesh_clear()
 
     return points_world
 
@@ -263,8 +320,9 @@ def is_entity(obj):
 
 # main
 def export_scene(context):
+    print("yep")
     depsgraph = bpy.context.evaluated_depsgraph_get()
-    scene_data = {"meshes": [], "cameras": [], "entities": []}
+    scene_data = {"meshes": [], "cameras": [], "entities": [], "cam_curves": []}
 
     blend_path = bpy.data.filepath
     if not blend_path:
@@ -272,7 +330,7 @@ def export_scene(context):
 
     for obj in bpy.data.objects:
         if is_entity(obj):
-            scene_data["entities"].append(export_entity(obj, context))
+            scene_data["entities"].append(export_entity(obj, depsgraph))
             continue
 
         if is_excluded(obj):
@@ -283,9 +341,12 @@ def export_scene(context):
             data = export_mesh(obj, depsgraph)
             if data is not None:
                 scene_data["meshes"].append(data)
-
         elif obj.type == 'CAMERA':
             scene_data["cameras"].append(export_camera(obj))
+        elif obj.type == 'CURVE':
+            curve_data = export_camera_curve(obj, depsgraph)
+            if curve_data is not None:
+                scene_data["cam_curves"].append(curve_data)
 
     output_path = "//scene_export.json"
 

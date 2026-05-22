@@ -37,7 +37,9 @@ classes = [
     # csn
     csn.EntityProps,
     csn.Arguments,
+    csn.CameraElements,
     csn.CXF_PT_prop,
+    csn.CXF_PT_camera,
     csn.CXF_PT_tools,
     csn.CXF_PT_export_scenery,
     csn.CXF_OT_reassing_ids,
@@ -62,6 +64,7 @@ def register():
     # csn
     bpy.types.Object.entity_props = bpy.props.PointerProperty(type=csn.EntityProps)
     bpy.types.Object.arguments = PointerProperty(type=csn.Arguments)
+    bpy.types.Object.camera_elements = bpy.props.PointerProperty(type=csn.CameraElements)
     bpy.types.Scene.next_entity_id = bpy.props.IntProperty(default=csn.DEFAULT_ID)
 
 def unregister():
@@ -74,6 +77,7 @@ def unregister():
     # csn
     del bpy.types.Object.entity_props
     del bpy.types.Object.arguments
+    del bpy.types.Object.camera_elements
     del bpy.types.Scene.next_entity_id
 
     for cls in reversed(classes):
