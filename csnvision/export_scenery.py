@@ -138,8 +138,17 @@ def export_mesh(obj, depsgraph):
               f"Consider triangulating the mesh before export.")
 
     obj_eval.to_mesh_clear()
+    
+    type = ""
+    if is_world(obj):
+        type = "world"
+    if is_collision(obj):
+        type = "collision"
+    if is_zone(obj):
+        type = "zone"
 
     return {
+        "type":  type,
         "name":  obj.name,
         "verts": vertices,
         "faces": faces,
@@ -201,6 +210,10 @@ def export_camera_info(obj):
         panningy_val = getattr(obj.camera_elements, f"Panningy_value_{i}", 0)
         distance_val = getattr(obj.camera_elements, f"distance_value_{i}", 0)
         spacing_val = getattr(obj.camera_elements, f"spacing_{i}", 0)
+        transition_target_cam = getattr(obj.camera_elements, f"transition_target_cam_{i}", "")
+        transition_type = getattr(obj.camera_elements, f"transition_type_{i}", None)
+        warp_in_target_type = getattr(obj.camera_elements, f"warp_in_target_type_{i}", "-")
+        warp_in_target_marker = getattr(obj.camera_elements, f"warp_in_target_{i}", "")
         
         elements.append({
             "mode": getattr(obj.camera_elements, f"mode_{i}", None),
@@ -208,7 +221,13 @@ def export_camera_info(obj):
             "panningy": panningy_val & 0xFFFFFFFF if enabled_panningy else None,
             "distance": distance_val & 0xFFFFFFFF if enabled_distance else None,
             "spacing": spacing_val if enabled_spacing else None,
+            "transition": {
+                "target_cam": transition_target_cam,
+                "type": transition_type,
+            } if transition_type != "-" else None,
             "interpolate": getattr(obj.camera_elements, f"interpolate_{i}", None),
+            "warp_in_target_type": warp_in_target_type if warp_in_target_type != '-' else None,
+            "warp_in_target_marker": warp_in_target_marker if warp_in_target_type != '-' else None,
         })
 
     return elements
@@ -216,11 +235,7 @@ def export_camera_info(obj):
 # camera curve export
 def export_camera_curve(obj, depsgraph):    
     collections = [c.name for c in obj.users_collection
-                   if c.name != "Scene Collection"]
-    for collection in collections:
-        if collection.startswith('entities'):
-            return None
-        
+                   if c.name != "Scene Collection"]        
     collection_name = collections[0] if collections else None
     
     curve_points = get_curve_points([obj], depsgraph)
@@ -238,16 +253,18 @@ def export_entity(obj, depsgraph):
     pos = world_mat.translation
     props = obj.entity_props
 
-    curve_points = get_curve_points(obj.children, depsgraph)
+    curve_points = get_curve_points([obj], depsgraph)
     base_points = curve_points or [pos]
     positions = [yup_pos(p) for p in base_points]
 
     data = {
         "zone": props.set_zone,
-        "name": props.prop_name,
+        "name": obj.name,
         "id": props.prop_id if props.prop_id_enabled else None,
         "type": props.prop_type,
         "subtype": props.prop_subtype,
+        "elevtype": props.prop_elevtype,
+        "marker": props.prop_marker,
         "arguments": [
             getattr(obj.arguments, f"value_{i}") & 0xFFFFFFFF
             for i in range(props.prop_arg_count)
@@ -300,29 +317,57 @@ def dump_compact(obj, indent=2, level=0):
     return json.dumps(obj)
 
 
-# collection filters
-def is_excluded(obj):
-    return any(
-        c.name.startswith('exclude_')
-        for c in obj.users_collection
-    )
+def get_collections(obj):
+    names = []
+    parent_map = {}
 
+    for collection in bpy.data.collections:
+        for child in collection.children:
+            parent_map[child] = collection
+
+    for collection in obj.users_collection:
+        if collection.name == "Scene Collection":
+            continue
+
+        current = collection
+        while current is not None:
+            if current.name != "Scene Collection" and current.name not in names:
+                names.append(current.name)
+            current = parent_map.get(current)
+
+    return names
+
+# collection filters
 def is_entity(obj):
+    if obj.type != 'MESH' and obj.type != 'CURVE':
+        return False
+    return 'entities' in get_collections(obj)    
+
+def is_zone(obj):
     if obj.type != 'MESH':
         return False
+    return 'zones' in get_collections(obj)
 
-    for c in obj.users_collection:
-        if c.name.startswith('entities'):
-            return True
+def is_world(obj):
+    if obj.type != 'MESH':
+        return False
+    return 'worlds' in get_collections(obj)
 
-    return False
+def is_collision(obj):
+    if obj.type != 'MESH':
+        return False
+    return 'collisions' in get_collections(obj)
 
+def is_camera(obj):   
+    if obj.type != 'CAMERA' and obj.type != 'CURVE':
+        return False
+    return 'cameras' in get_collections(obj)
 
 # main
 def export_scene(context):
-    print("yep")
+    print("export_scene")
     depsgraph = bpy.context.evaluated_depsgraph_get()
-    scene_data = {"meshes": [], "cameras": [], "entities": [], "cam_curves": []}
+    scene_data = {"meshes": [], "zones": [], "entities": [], "cameras": [],  "cam_curves": []}
 
     blend_path = bpy.data.filepath
     if not blend_path:
@@ -332,21 +377,27 @@ def export_scene(context):
         if is_entity(obj):
             scene_data["entities"].append(export_entity(obj, depsgraph))
             continue
-
-        if is_excluded(obj):
-            print(f"excluded object {obj}")
-            continue
-
-        if obj.type == 'MESH':
+        
+        if is_zone(obj) or is_world(obj) or is_collision(obj):
             data = export_mesh(obj, depsgraph)
             if data is not None:
-                scene_data["meshes"].append(data)
-        elif obj.type == 'CAMERA':
-            scene_data["cameras"].append(export_camera(obj))
-        elif obj.type == 'CURVE':
-            curve_data = export_camera_curve(obj, depsgraph)
-            if curve_data is not None:
-                scene_data["cam_curves"].append(curve_data)
+                if is_zone(obj):
+                    scene_data["zones"].append(data)
+                else:
+                    scene_data["meshes"].append(data)
+                continue
+        
+        if is_camera(obj):
+            if obj.type == 'CAMERA':
+                scene_data["cameras"].append(export_camera(obj))
+                continue
+            if obj.type == 'CURVE':
+                curve_data = export_camera_curve(obj, depsgraph)
+                if curve_data is not None:
+                    scene_data["cam_curves"].append(curve_data)
+                    continue
+                
+        print(f"excluded object {obj}")
 
     output_path = "//scene_export.json"
 

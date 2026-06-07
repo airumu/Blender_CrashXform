@@ -32,12 +32,6 @@ class EntityProps(PropertyGroup):
 
     # entity propertirs
 
-    prop_name: StringProperty(
-        name="Name",
-        default="",
-        maxlen=31
-    )
-
     prop_id_enabled: BoolProperty(
         name="ID",
         description="Override entity ID.",
@@ -63,6 +57,22 @@ class EntityProps(PropertyGroup):
         max=255
     )
 
+    prop_elevtype: EnumProperty(
+        name="",
+        description="Elevator type",
+        items=[
+            ("-", "-", ""),
+            ("send", "Send", ""),
+            ("catch", "Catch", ""),
+        ],
+        default="-"
+    )
+
+    prop_marker: BoolProperty(
+        name="Marker",
+        description="Markers are used as targets for various things in CSNvision, but arent included in the NSF",
+        default=False
+    )
     prop_arg_count: IntProperty(
         name="Arguments:",
         description="Set the number of arguments.",
@@ -150,7 +160,7 @@ for i in range(MAX_ARGS):
 for i in range(MAX_CAMERAS):
     # Mode enum
     CameraElements.__annotations__[f"mode_{i}"] = EnumProperty(
-        name="Mode",
+        name="",
         description="In-game camera mode",
         items=[
             ("AUTO", "Auto", ""),
@@ -222,7 +232,7 @@ for i in range(MAX_CAMERAS):
     
     # Interpolate
     CameraElements.__annotations__[f"interpolate_{i}"] = EnumProperty(
-        name="Interp",
+        name="",
         description="Override default interpolation setting",
         items=[
             ("AUTO", "Auto", ""),
@@ -230,6 +240,41 @@ for i in range(MAX_CAMERAS):
             ("DONT INTERPOLATE", "Don't interpolate", ""),
         ],
         default="AUTO"
+    )
+    
+    CameraElements.__annotations__[f"transition_target_cam_{i}"] = StringProperty(
+        name="",
+        description="Transition target camera name",
+        default=""
+    )
+    CameraElements.__annotations__[f"transition_type_{i}"] = EnumProperty(
+        name="",
+        description="Transition type",
+        items=[
+            ("-", "-", ""),
+            ("split", "Split", ""),
+            ("collision", "Collision", ""),
+            ("elevator", "Elevator", ""),
+        ],
+        default="-"
+    )
+    
+    # Warp in target
+    CameraElements.__annotations__[f"warp_in_target_type_{i}"] = EnumProperty(
+        name="",
+        description="Warp in target mode",
+        items=[
+            ("-", "-", ""),
+            ("warp-in", "Warp-in", ""),
+            ("bonus", "Bonus", ""),
+            ("bonus warp-in", "Bonus Warp-in", ""),
+        ],
+        default="-"
+    )
+    CameraElements.__annotations__[f"warp_in_target_{i}"] = StringProperty(
+        name="",
+        description="Warp in target marker name",
+        default=""
     )
 
 # Panels
@@ -258,21 +303,25 @@ class CXF_PT_prop(Panel):
         layout.prop(props, "set_zone")
         layout.separator()
 
-        # name
-        layout.prop(props, "prop_name")
-
         # id
         row = layout.row(align=True)
         row.prop(props, "prop_id_enabled")
         col = row.column()
         col.enabled = props.prop_id_enabled
         col.prop(props, "prop_id")
-        layout.separator()
+        
+        # marker
+        layout.prop(props, "prop_marker")        
 
+        # elevator type
+        row = layout.row(align=True)
+        row.label(text="Elevator type:")
+        row.prop(props, "prop_elevtype")
+        layout.separator()
+        
         # type/subtype
         layout.prop(props, "prop_type")
-        layout.prop(props, "prop_subtype")
-        layout.separator()
+        layout.prop(props, "prop_subtype")        
 
         # arg count
         layout.use_property_split = True
@@ -317,8 +366,11 @@ class CXF_PT_camera(Panel):
             col.label(text=f"Instance {i + 1}", icon='CAMERA_DATA')
             
             # Mode
-            row = col.row(align=True)            
-            row.prop(obj.camera_elements, f"mode_{i}")            
+            row = col.row(align=True)
+            sub = row.column()
+            sub.label(text="Mode:")
+            sub = row.column()       
+            sub.prop(obj.camera_elements, f"mode_{i}")                        
             
             # Distance
             row = col.row(align=True)
@@ -342,7 +394,11 @@ class CXF_PT_camera(Panel):
             sub.prop(obj.camera_elements, f"Panningy_hex_{i}")
             
             # Interpolate            
-            col.prop(obj.camera_elements, f"interpolate_{i}")            
+            row = col.row(align = True)
+            sub = row.column()
+            sub.label(text="Interpolation")
+            sub = row.column()
+            sub.prop(obj.camera_elements, f"interpolate_{i}")            
             
             # Spacing
             row = col.row(align=True)
@@ -350,6 +406,31 @@ class CXF_PT_camera(Panel):
             sub = row.column()
             sub.enabled = getattr(obj.camera_elements, f"spacing_enabled_{i}")
             sub.prop(obj.camera_elements, f"spacing_{i}")
+            
+            col.separator()
+            
+            # Transition
+            row = col.row(align=True)                                    
+            row.label(text="Transition:")                   
+            row.prop(obj.camera_elements, f"transition_type_{i}")            
+            
+            sub = col.row(align=True)
+            sub.enabled = getattr(obj.camera_elements, f"transition_type_{i}") != "-"
+            sub.label(text="Target cam:")
+            sub.prop(obj.camera_elements, f"transition_target_cam_{i}")            
+            
+            col.separator()
+            
+            # Warp in target
+            row = col.row(align=True)
+            row.label(text="Prop 198 type:")
+            row.prop(obj.camera_elements, f"warp_in_target_type_{i}")
+            
+            sub = col.row(align=True)
+            warp_type = getattr(obj.camera_elements, f"warp_in_target_type_{i}")
+            sub.enabled = warp_type in ("warp-in", "bonus warp-in")
+            sub.label(text="Marker:")
+            sub.prop(obj.camera_elements, f"warp_in_target_{i}")
             
             col.separator()
             
@@ -447,6 +528,8 @@ class CXF_OT_copy_props(Operator):
             "id": props.prop_id if props.prop_id_enabled else None,
             "type": props.prop_type,
             "subtype": props.prop_subtype,
+            "elevtype": props.prop_elevtype,
+            "marker": props.prop_marker,
             "arguments": [
                 getattr(context.object.arguments, f"value_{i}") & 0xFFFFFFFF
                 for i in range(props.prop_arg_count)
@@ -482,6 +565,8 @@ class CXF_OT_paste_props(Operator):
 
                 props.prop_type = data.get("type", 0)
                 props.prop_subtype = data.get("subtype", 0)
+                props.prop_elevtype = data.get("elevtype", "-")
+                props.prop_marker = data.get("marker", False)
 
                 args = data.get("arguments", [])
                 props.prop_arg_count = min(len(args), MAX_ARGS)
