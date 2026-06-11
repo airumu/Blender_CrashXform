@@ -64,11 +64,20 @@ def export_mesh(obj, depsgraph):
 
     # vertices
     vertices = []
+    fx_val = None
+    if hasattr(obj, "world_props"):
+        try:
+            fx = getattr(obj.world_props, "fx", 0)
+            if fx is not None and fx != 0:
+                fx_val = int(fx)
+        except Exception:
+            fx_val = None
     for v in mesh.vertices:
         world_pos = world_mat @ v.co
-        vertices.append({
-            "pos": yup_pos(world_pos)
-        })
+        vert = {"pos": yup_pos(world_pos)}
+        if fx_val is not None:
+            vert["fx"] = fx_val
+        vertices.append(vert)
 
     # faces
     faces         = []
@@ -155,6 +164,35 @@ def export_mesh(obj, depsgraph):
     }
 
 
+def merge_meshes(mesh_list, collection_name):
+    """Merge multiple mesh exports into a single mesh."""
+    if not mesh_list:
+        return None
+    
+    merged_verts = []
+    merged_faces = []
+    vertex_offset = 0
+    
+    for mesh_data in mesh_list:
+        # Add vertices
+        merged_verts.extend(mesh_data["verts"])
+        
+        # Add faces with adjusted vertex indices
+        for face in mesh_data["faces"]:
+            adjusted_face = face.copy()
+            adjusted_face["verts"] = [v + vertex_offset for v in adjusted_face["verts"]]
+            merged_faces.append(adjusted_face)
+        
+        vertex_offset += len(mesh_data["verts"])
+    
+    return {
+        "type": "world",
+        "name": collection_name,
+        "verts": merged_verts,
+        "faces": merged_faces,
+    }
+
+
 # camera export
 def export_camera(obj):
     world_mat = obj.matrix_world
@@ -201,15 +239,16 @@ def export_camera_info(obj):
 
     elements = []
     for i in range(count):
-        enabled_panningx = getattr(obj.camera_elements, f"Panningx_enabled_{i}", False)
-        enabled_panningy = getattr(obj.camera_elements, f"Panningy_enabled_{i}", False)
+        enabled_panning = getattr(obj.camera_elements, f"Panning_enabled_{i}", False)
         enabled_distance = getattr(obj.camera_elements, f"distance_enabled_{i}", False)
         enabled_spacing = getattr(obj.camera_elements, f"spacing_enabled_{i}", False)
+        enabled_water = getattr(obj.camera_elements, f"water_enabled_{i}", False)
 
         panningx_val = getattr(obj.camera_elements, f"Panningx_value_{i}", 0)
         panningy_val = getattr(obj.camera_elements, f"Panningy_value_{i}", 0)
         distance_val = getattr(obj.camera_elements, f"distance_value_{i}", 0)
         spacing_val = getattr(obj.camera_elements, f"spacing_{i}", 0)
+        water_target = getattr(obj.camera_elements, f"water_target_{i}", "")
         transition_target_cam = getattr(obj.camera_elements, f"transition_target_cam_{i}", "")
         transition_type = getattr(obj.camera_elements, f"transition_type_{i}", None)
         warp_in_target_type = getattr(obj.camera_elements, f"warp_in_target_type_{i}", "-")
@@ -217,10 +256,11 @@ def export_camera_info(obj):
         
         elements.append({
             "mode": getattr(obj.camera_elements, f"mode_{i}", None),
-            "panningx": panningx_val & 0xFFFFFFFF if enabled_panningx else None,
-            "panningy": panningy_val & 0xFFFFFFFF if enabled_panningy else None,
+            "panningx": panningx_val & 0xFFFFFFFF if enabled_panning else None,
+            "panningy": panningy_val & 0xFFFFFFFF if enabled_panning else None,
             "distance": distance_val & 0xFFFFFFFF if enabled_distance else None,
             "spacing": spacing_val if enabled_spacing else None,
+            "water": water_target if enabled_water else None,
             "transition": {
                 "target_cam": transition_target_cam,
                 "type": transition_type,
@@ -373,19 +413,36 @@ def export_scene(context):
     if not blend_path:
         raise RuntimeError("The .blend file has not been saved yet.")
 
+    world_meshes_by_collection = {}
+    
     for obj in bpy.data.objects:
         if is_entity(obj):
             scene_data["entities"].append(export_entity(obj, depsgraph))
             continue
         
-        if is_zone(obj) or is_world(obj) or is_collision(obj):
+        if is_zone(obj):
             data = export_mesh(obj, depsgraph)
             if data is not None:
-                if is_zone(obj):
-                    scene_data["zones"].append(data)
-                else:
-                    scene_data["meshes"].append(data)
-                continue
+                scene_data["zones"].append(data)
+            continue
+        
+        if is_world(obj):
+            collections = get_collections(obj)
+            collection_key = collections[0] if collections else "default"
+            
+            if collection_key not in world_meshes_by_collection:
+                world_meshes_by_collection[collection_key] = []
+            
+            data = export_mesh(obj, depsgraph)
+            if data is not None:
+                world_meshes_by_collection[collection_key].append(data)
+            continue
+        
+        if is_collision(obj):
+            data = export_mesh(obj, depsgraph)
+            if data is not None:
+                scene_data["meshes"].append(data)
+            continue
         
         if is_camera(obj):
             if obj.type == 'CAMERA':
@@ -398,6 +455,17 @@ def export_scene(context):
                     continue
                 
         print(f"excluded object {obj}")
+
+    # Add grouped world meshes to scene_data
+    for collection_name, meshes in world_meshes_by_collection.items():
+        if meshes:
+            if collection_name == "worlds":
+                for mesh in meshes:
+                    scene_data["meshes"].append(mesh)
+            else:
+                merged = merge_meshes(meshes, collection_name)
+                if merged is not None:
+                    scene_data["meshes"].append(merged)
 
     output_path = "//scene_export.json"
 

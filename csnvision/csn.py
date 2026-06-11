@@ -144,6 +144,16 @@ class Arguments(PropertyGroup):
 class CameraElements(PropertyGroup):
     pass
 
+
+class WorldProps(PropertyGroup):
+    fx: IntProperty(
+        name="FX",
+        description="World FX (0-3)",
+        default=0,
+        min=0,
+        max=3
+    )
+
 # Generation
 
 for i in range(MAX_ARGS):
@@ -172,10 +182,10 @@ for i in range(MAX_CAMERAS):
         default="AUTO"
     )
     
-    # PanningX
-    CameraElements.__annotations__[f"Panningx_enabled_{i}"] = BoolProperty(
-        name="Panning X",
-        description="Camera panning - horizontal",
+    # Panning
+    CameraElements.__annotations__[f"Panning_enabled_{i}"] = BoolProperty(
+        name="Panning",
+        description="Enable camera panning for both horizontal and vertical channels",
         default=False
     )
     CameraElements.__annotations__[f"Panningx_value_{i}"] = IntProperty(
@@ -186,13 +196,6 @@ for i in range(MAX_CAMERAS):
         get=make_camera_hex_getter(i, "Panningx"),
         set=make_camera_hex_setter(i, "Panningx")
     )
-    
-    # PanningY
-    CameraElements.__annotations__[f"Panningy_enabled_{i}"] = BoolProperty(
-        name="Panning Y",
-        description="Camera panning - vertical",
-        default=False
-    )
     CameraElements.__annotations__[f"Panningy_value_{i}"] = IntProperty(
         default=0x40
     )
@@ -200,6 +203,18 @@ for i in range(MAX_CAMERAS):
         name=f"",
         get=make_camera_hex_getter(i, "Panningy"),
         set=make_camera_hex_setter(i, "Panningy")
+    )
+    
+    # Water
+    CameraElements.__annotations__[f"water_enabled_{i}"] = BoolProperty(
+        name="Water",
+        description="Enable water target export",
+        default=False
+    )
+    CameraElements.__annotations__[f"water_target_{i}"] = StringProperty(
+        name="",
+        description="Water target marker name",
+        default=""
     )
     
     # Distance
@@ -379,18 +394,14 @@ class CXF_PT_camera(Panel):
             sub.enabled = getattr(obj.camera_elements, f"distance_enabled_{i}")
             sub.prop(obj.camera_elements, f"distance_hex_{i}")
             
-            # PanningX
+            # Panning
             row = col.row(align=True)
-            row.prop(obj.camera_elements, f"Panningx_enabled_{i}")
             sub = row.column()
-            sub.enabled = getattr(obj.camera_elements, f"Panningx_enabled_{i}")
+            sub.prop(obj.camera_elements, f"Panning_enabled_{i}")
+            sub = row.column()
+            sub = sub.row(align=True)
+            sub.enabled = getattr(obj.camera_elements, f"Panning_enabled_{i}")
             sub.prop(obj.camera_elements, f"Panningx_hex_{i}")
-            
-            # PanningY
-            row = col.row(align=True)
-            row.prop(obj.camera_elements, f"Panningy_enabled_{i}")
-            sub = row.column()
-            sub.enabled = getattr(obj.camera_elements, f"Panningy_enabled_{i}")
             sub.prop(obj.camera_elements, f"Panningy_hex_{i}")
             
             # Interpolate            
@@ -433,6 +444,15 @@ class CXF_PT_camera(Panel):
             sub.prop(obj.camera_elements, f"warp_in_target_{i}")
             
             col.separator()
+
+            # Water
+            row = col.row(align=True)
+            row.prop(obj.camera_elements, f"water_enabled_{i}")
+            sub = row.column()
+            sub.enabled = getattr(obj.camera_elements, f"water_enabled_{i}")
+            sub.prop(obj.camera_elements, f"water_target_{i}")
+            
+            col.separator()
             
 
 class CXF_PT_tools(Panel):
@@ -469,6 +489,34 @@ class CXF_PT_export_scenery(Panel):
         obj = context.object
 
         layout.operator(CXF_OT_export_scenery_json.bl_idname, text="Export")
+
+
+class CXF_PT_world_properties(Panel):
+    bl_label = "World Properties"
+    bl_space_type = "VIEW_3D"
+    bl_region_type = "UI"
+    bl_category = "CSNvision"
+
+    def draw_header(self, context):
+        layout = self.layout
+        layout.label(icon='WORLD')
+
+    def draw(self, context):
+        layout = self.layout
+        obj = context.object
+
+        if obj is None:
+            layout.label(text="No object selected")
+            return
+
+        # only show for world meshes
+        if not hasattr(obj, 'world_props') or not export_scenery.is_world(obj):
+            layout.label(text="Select a world mesh")
+            return
+
+        props = obj.world_props
+
+        layout.prop(props, "fx")
 
 # Execute
 

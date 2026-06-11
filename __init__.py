@@ -36,8 +36,10 @@ classes = [
     cxf.CXF_OT_export_model_json,
     # csn
     csn.EntityProps,
+    csn.WorldProps,
     csn.Arguments,
     csn.CameraElements,
+    csn.CXF_PT_world_properties,
     csn.CXF_PT_prop,
     csn.CXF_PT_camera,
     csn.CXF_PT_tools,
@@ -65,6 +67,7 @@ def register():
     bpy.types.Object.entity_props = bpy.props.PointerProperty(type=csn.EntityProps)
     bpy.types.Object.arguments = PointerProperty(type=csn.Arguments)
     bpy.types.Object.camera_elements = bpy.props.PointerProperty(type=csn.CameraElements)
+    bpy.types.Object.world_props = PointerProperty(type=csn.WorldProps)
     bpy.types.Scene.next_entity_id = bpy.props.IntProperty(default=csn.DEFAULT_ID)
 
 def unregister():
@@ -78,6 +81,7 @@ def unregister():
     del bpy.types.Object.entity_props
     del bpy.types.Object.arguments
     del bpy.types.Object.camera_elements
+    del bpy.types.Object.world_props
     del bpy.types.Scene.next_entity_id
 
     for cls in reversed(classes):
