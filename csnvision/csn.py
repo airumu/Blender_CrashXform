@@ -185,16 +185,17 @@ for i in range(MAX_CAMERAS):
     # Panning
     CameraElements.__annotations__[f"Panning_enabled_{i}"] = BoolProperty(
         name="Panning",
-        description="Enable camera panning for both horizontal and vertical channels",
+        description="Enable camera panning override",
         default=False
     )
     CameraElements.__annotations__[f"Panningx_value_{i}"] = IntProperty(
-        default=0x40
+        default=0x40,
     )
     CameraElements.__annotations__[f"Panningx_hex_{i}"] = StringProperty(
         name=f"",
         get=make_camera_hex_getter(i, "Panningx"),
-        set=make_camera_hex_setter(i, "Panningx")
+        set=make_camera_hex_setter(i, "Panningx"),
+        description="Panning X"
     )
     CameraElements.__annotations__[f"Panningy_value_{i}"] = IntProperty(
         default=0x40
@@ -202,9 +203,33 @@ for i in range(MAX_CAMERAS):
     CameraElements.__annotations__[f"Panningy_hex_{i}"] = StringProperty(
         name=f"",
         get=make_camera_hex_getter(i, "Panningy"),
-        set=make_camera_hex_setter(i, "Panningy")
+        set=make_camera_hex_setter(i, "Panningy"),
+        description="Panning Y"
     )
     
+    # Wavy
+    CameraElements.__annotations__[f"wavy_enabled_{i}"] = BoolProperty(
+        name="Wavy FX1",
+        description="Enable waviness for FX 1 vertices",
+        default=False
+    )
+    CameraElements.__annotations__[f"fxcontrol1_value_{i}"] = IntProperty(
+        default=0
+    )
+    CameraElements.__annotations__[f"fxcontrol1_hex_{i}"] = StringProperty(
+        name="",
+        get=make_camera_hex_getter(i, "fxcontrol1"),
+        set=make_camera_hex_setter(i, "fxcontrol1")
+    )
+    CameraElements.__annotations__[f"fxcontrol2_value_{i}"] = IntProperty(
+        default=0x14
+    )
+    CameraElements.__annotations__[f"fxcontrol2_hex_{i}"] = StringProperty(
+        name="",
+        get=make_camera_hex_getter(i, "fxcontrol2"),
+        set=make_camera_hex_setter(i, "fxcontrol2")
+    )
+
     # Water
     CameraElements.__annotations__[f"water_enabled_{i}"] = BoolProperty(
         name="Water",
@@ -215,6 +240,79 @@ for i in range(MAX_CAMERAS):
         name="",
         description="Water target marker name",
         default=""
+    )
+    
+    # Fade FX
+    CameraElements.__annotations__[f"fade_fx_enabled_{i}"] = BoolProperty(
+        name="Fade FX 1",
+        description="Enable fade-in for FX1",
+        default=False
+    )
+    CameraElements.__annotations__[f"glow_fx2_enabled_{i}"] = BoolProperty(
+        name="Glow FX 2",
+        description="Enable glow for FX2",
+        default=False
+    )
+    # Dark setting
+    CameraElements.__annotations__[f"dark_{i}"] = EnumProperty(
+        name="",
+        description="Darkness setting",
+        items=[
+            ("AUTO", "Auto", ""),
+            ("DARK", "Dark", ""),
+            ("NOT_DARK", "Not dark", ""),
+        ],
+        default="AUTO"
+    )
+    # Cold setting
+    CameraElements.__annotations__[f"cold_{i}"] = EnumProperty(
+        name="",
+        description="Cold setting",
+        items=[
+            ("AUTO", "Auto", ""),
+            ("COLD", "Cold", ""),
+            ("NOT_COLD", "Not cold", ""),
+        ],
+        default="AUTO"
+    )
+    # Fog distance
+    CameraElements.__annotations__[f"fog_distance_enabled_{i}"] = BoolProperty(
+        name="Fog Distance",
+        description="Enable fog distance override",
+        default=False
+    )
+    CameraElements.__annotations__[f"fog_distance_value_{i}"] = IntProperty(
+        default=0
+    )
+    CameraElements.__annotations__[f"fog_distance_hex_{i}"] = StringProperty(
+        name="",
+        get=make_camera_hex_getter(i, "fog_distance"),
+        set=make_camera_hex_setter(i, "fog_distance")
+    )
+
+    # Mirror
+    CameraElements.__annotations__[f"mirror_enabled_{i}"] = BoolProperty(
+        name="Mirror",
+        description="Enable mirror target export",
+        default=False
+    )
+    CameraElements.__annotations__[f"mirror_target_{i}"] = StringProperty(
+        name="",
+        description="Mirror target marker name",
+        default=""
+    )
+    
+    # Music
+    CameraElements.__annotations__[f"music_enabled_{i}"] = BoolProperty(
+        name="Music",
+        description="Enable music track",
+        default=False
+    )
+    CameraElements.__annotations__[f"music_target_{i}"] = StringProperty(
+        name="",
+        description="Music track id (max 5 chars)",
+        default="",
+        maxlen=5
     )
     
     # Distance
@@ -396,10 +494,9 @@ class CXF_PT_camera(Panel):
             
             # Panning
             row = col.row(align=True)
-            sub = row.column()
-            sub.prop(obj.camera_elements, f"Panning_enabled_{i}")
-            sub = row.column()
-            sub = sub.row(align=True)
+            split = row.split(factor=0.48)
+            split.prop(obj.camera_elements, f"Panning_enabled_{i}")
+            sub = split.row(align=True)
             sub.enabled = getattr(obj.camera_elements, f"Panning_enabled_{i}")
             sub.prop(obj.camera_elements, f"Panningx_hex_{i}")
             sub.prop(obj.camera_elements, f"Panningy_hex_{i}")
@@ -417,6 +514,13 @@ class CXF_PT_camera(Panel):
             sub = row.column()
             sub.enabled = getattr(obj.camera_elements, f"spacing_enabled_{i}")
             sub.prop(obj.camera_elements, f"spacing_{i}")
+            
+            # Fog distance
+            row = col.row(align=True)
+            row.prop(obj.camera_elements, f"fog_distance_enabled_{i}")
+            sub = row.column()
+            sub.enabled = getattr(obj.camera_elements, f"fog_distance_enabled_{i}")
+            sub.prop(obj.camera_elements, f"fog_distance_hex_{i}")
             
             col.separator()
             
@@ -451,7 +555,45 @@ class CXF_PT_camera(Panel):
             sub = row.column()
             sub.enabled = getattr(obj.camera_elements, f"water_enabled_{i}")
             sub.prop(obj.camera_elements, f"water_target_{i}")
+
+            # Mirror
+            row = col.row(align=True)
+            row.prop(obj.camera_elements, f"mirror_enabled_{i}")
+            sub = row.column()
+            sub.enabled = getattr(obj.camera_elements, f"mirror_enabled_{i}")
+            sub.prop(obj.camera_elements, f"mirror_target_{i}")
+
+            # Music
+            row = col.row(align=True)
+            row.prop(obj.camera_elements, f"music_enabled_{i}")
+            sub = row.column()
+            sub.enabled = getattr(obj.camera_elements, f"music_enabled_{i}")
+            sub.prop(obj.camera_elements, f"music_target_{i}")
+
+            # Wavy
+            row = col.row(align=True)
+            split = row.split(factor=0.48)
+            split.prop(obj.camera_elements, f"wavy_enabled_{i}")
+            sub = split.row(align=True)
+            sub.enabled = getattr(obj.camera_elements, f"wavy_enabled_{i}")
+            sub.prop(obj.camera_elements, f"fxcontrol1_hex_{i}")
+            sub.prop(obj.camera_elements, f"fxcontrol2_hex_{i}")
+
+            # Fade FX / Glow FX2
+            row = col.row(align=True)
+            row.prop(obj.camera_elements, f"fade_fx_enabled_{i}")
+            row.prop(obj.camera_elements, f"glow_fx2_enabled_{i}")
             
+            # dark
+            row = col.row(align=True)
+            row.label(text="Dark")
+            row.prop(obj.camera_elements, f"dark_{i}")
+            
+            # cold
+            row = col.row(align=True)
+            row.label(text="Cold")
+            row.prop(obj.camera_elements, f"cold_{i}")
+
             col.separator()
             
 

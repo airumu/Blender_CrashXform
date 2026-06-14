@@ -243,13 +243,26 @@ def export_camera_info(obj):
         enabled_distance = getattr(obj.camera_elements, f"distance_enabled_{i}", False)
         enabled_spacing = getattr(obj.camera_elements, f"spacing_enabled_{i}", False)
         enabled_water = getattr(obj.camera_elements, f"water_enabled_{i}", False)
+        enabled_mirror = getattr(obj.camera_elements, f"mirror_enabled_{i}", False)
+        enabled_music = getattr(obj.camera_elements, f"music_enabled_{i}", False)
+        enabled_wavy = getattr(obj.camera_elements, f"wavy_enabled_{i}", False)
+        enabled_fade = getattr(obj.camera_elements, f"fade_fx_enabled_{i}", False)
+        enabled_glow = getattr(obj.camera_elements, f"glow_fx2_enabled_{i}", False)
+        dark_val = getattr(obj.camera_elements, f"dark_{i}", None)
+        cold_val = getattr(obj.camera_elements, f"cold_{i}", None)
+        enabled_fog = getattr(obj.camera_elements, f"fog_distance_enabled_{i}", False)
 
         panningx_val = getattr(obj.camera_elements, f"Panningx_value_{i}", 0)
         panningy_val = getattr(obj.camera_elements, f"Panningy_value_{i}", 0)
         distance_val = getattr(obj.camera_elements, f"distance_value_{i}", 0)
         spacing_val = getattr(obj.camera_elements, f"spacing_{i}", 0)
         water_target = getattr(obj.camera_elements, f"water_target_{i}", "")
+        mirror_target = getattr(obj.camera_elements, f"mirror_target_{i}", "")
+        music_target = getattr(obj.camera_elements, f"music_target_{i}", "")
+        fxcontrol1_val = getattr(obj.camera_elements, f"fxcontrol1_value_{i}", 0)
+        fxcontrol2_val = getattr(obj.camera_elements, f"fxcontrol2_value_{i}", 0)
         transition_target_cam = getattr(obj.camera_elements, f"transition_target_cam_{i}", "")
+        fog_distance_val = getattr(obj.camera_elements, f"fog_distance_value_{i}", 0)
         transition_type = getattr(obj.camera_elements, f"transition_type_{i}", None)
         warp_in_target_type = getattr(obj.camera_elements, f"warp_in_target_type_{i}", "-")
         warp_in_target_marker = getattr(obj.camera_elements, f"warp_in_target_{i}", "")
@@ -261,6 +274,16 @@ def export_camera_info(obj):
             "distance": distance_val & 0xFFFFFFFF if enabled_distance else None,
             "spacing": spacing_val if enabled_spacing else None,
             "water": water_target if enabled_water else None,
+            "mirror": mirror_target if enabled_mirror else None,
+            "music": music_target if enabled_music else None,
+            "fadein_fx1": True if enabled_fade else None,
+            "glow_fx2": True if enabled_glow else None,
+            "dark": dark_val,
+            "cold": cold_val,
+            "fog_distance": fog_distance_val & 0xFFFFFFFF if enabled_fog else None,
+            "wavy": enabled_wavy,
+            "fxcontrol1": fxcontrol1_val & 0xFFFFFFFF if enabled_wavy else None,
+            "fxcontrol2": fxcontrol2_val & 0xFFFFFFFF if enabled_wavy else None,
             "transition": {
                 "target_cam": transition_target_cam,
                 "type": transition_type,
@@ -467,7 +490,8 @@ def export_scene(context):
                 if merged is not None:
                     scene_data["meshes"].append(merged)
 
-    output_path = "//scene_export.json"
+    blend_name = os.path.splitext(os.path.basename(blend_path))[0]
+    output_path = f"//{blend_name}_export.json"
 
     abs_path = bpy.path.abspath(output_path)
     with open(abs_path, 'w', encoding='utf-8') as f:
