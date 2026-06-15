@@ -83,12 +83,29 @@ class EntityProps(PropertyGroup):
     )
 
     # camera properties
-
     cam_count: IntProperty(
         name="Instances:",
         description="Set the number of camera elements.\nShould match the number defined by the name.",
         default=0,
-        min=0,
+        min=1,
+        max=MAX_CAMERAS,
+        options={'SKIP_SAVE'}
+    )
+    
+    def get_cam_selected(self):
+        max_index = max(self.cam_count, 0)
+        return min(self.get("cam_selected_raw", 1), max_index)
+
+    def set_cam_selected(self, value):
+        max_index = max(self.cam_count, 0)
+        self["cam_selected_raw"] = max(1, min(value, max_index))
+
+    cam_selected: IntProperty(
+        name="Selected:",
+        description="Select which camera instance to edit",
+        get=get_cam_selected,
+        set=set_cam_selected,
+        min = 0,
         max=MAX_CAMERAS,
         options={'SKIP_SAVE'}
     )
@@ -472,129 +489,141 @@ class CXF_PT_camera(Panel):
         layout.prop(props, "cam_count")
         layout.use_property_split = False
 
-        # cameras
+        # instance selector
+        layout.use_property_split = True
+        row = layout.row()
+        row.prop(props, "cam_selected")
+        layout.use_property_split = False
+
+        if props.cam_count == 0:
+            return
+        
+        i = props.cam_selected - 1
+
         box = layout.box()
-        for i in range(props.cam_count):
-            col = box.column()
-            col.label(text=f"Instance {i + 1}", icon='CAMERA_DATA')
+        col = box.column()        
+        try:
+            camname = obj.name.split(',')[i]
+        except:
+            camname = f'No {i}-th ID!!'
             
-            # Mode
-            row = col.row(align=True)
-            sub = row.column()
-            sub.label(text="Mode:")
-            sub = row.column()       
-            sub.prop(obj.camera_elements, f"mode_{i}")                        
-            
-            # Distance
-            row = col.row(align=True)
-            row.prop(obj.camera_elements, f"distance_enabled_{i}")
-            sub = row.column()
-            sub.enabled = getattr(obj.camera_elements, f"distance_enabled_{i}")
-            sub.prop(obj.camera_elements, f"distance_hex_{i}")
-            
-            # Panning
-            row = col.row(align=True)
-            split = row.split(factor=0.48)
-            split.prop(obj.camera_elements, f"Panning_enabled_{i}")
-            sub = split.row(align=True)
-            sub.enabled = getattr(obj.camera_elements, f"Panning_enabled_{i}")
-            sub.prop(obj.camera_elements, f"Panningx_hex_{i}")
-            sub.prop(obj.camera_elements, f"Panningy_hex_{i}")
-            
-            # Interpolate            
-            row = col.row(align = True)
-            sub = row.column()
-            sub.label(text="Interpolation")
-            sub = row.column()
-            sub.prop(obj.camera_elements, f"interpolate_{i}")            
-            
-            # Spacing
-            row = col.row(align=True)
-            row.prop(obj.camera_elements, f"spacing_enabled_{i}")
-            sub = row.column()
-            sub.enabled = getattr(obj.camera_elements, f"spacing_enabled_{i}")
-            sub.prop(obj.camera_elements, f"spacing_{i}")
-            
-            # Fog distance
-            row = col.row(align=True)
-            row.prop(obj.camera_elements, f"fog_distance_enabled_{i}")
-            sub = row.column()
-            sub.enabled = getattr(obj.camera_elements, f"fog_distance_enabled_{i}")
-            sub.prop(obj.camera_elements, f"fog_distance_hex_{i}")
-            
-            col.separator()
-            
-            # Transition
-            row = col.row(align=True)                                    
-            row.label(text="Transition:")                   
-            row.prop(obj.camera_elements, f"transition_type_{i}")            
-            
-            sub = col.row(align=True)
-            sub.enabled = getattr(obj.camera_elements, f"transition_type_{i}") != "-"
-            sub.label(text="Target cam:")
-            sub.prop(obj.camera_elements, f"transition_target_cam_{i}")            
-            
-            col.separator()
-            
-            # Warp in target
-            row = col.row(align=True)
-            row.label(text="Prop 198 type:")
-            row.prop(obj.camera_elements, f"warp_in_target_type_{i}")
-            
-            sub = col.row(align=True)
-            warp_type = getattr(obj.camera_elements, f"warp_in_target_type_{i}")
-            sub.enabled = warp_type in ("warp-in", "bonus warp-in")
-            sub.label(text="Marker:")
-            sub.prop(obj.camera_elements, f"warp_in_target_{i}")
-            
-            col.separator()
+        col.label(text=f"Instance #{i + 1} ({camname})", icon='CAMERA_DATA')
 
-            # Water
-            row = col.row(align=True)
-            row.prop(obj.camera_elements, f"water_enabled_{i}")
-            sub = row.column()
-            sub.enabled = getattr(obj.camera_elements, f"water_enabled_{i}")
-            sub.prop(obj.camera_elements, f"water_target_{i}")
+        # Mode
+        row = col.row(align=True)
+        sub = row.column()
+        sub.label(text="Mode:")
+        sub = row.column()       
+        sub.prop(obj.camera_elements, f"mode_{i}")                        
+        
+        # Distance
+        row = col.row(align=True)
+        row.prop(obj.camera_elements, f"distance_enabled_{i}")
+        sub = row.column()
+        sub.enabled = getattr(obj.camera_elements, f"distance_enabled_{i}")
+        sub.prop(obj.camera_elements, f"distance_hex_{i}")
+        
+        # Panning
+        row = col.row(align=True)
+        split = row.split(factor=0.48)
+        split.prop(obj.camera_elements, f"Panning_enabled_{i}")
+        sub = split.row(align=True)
+        sub.enabled = getattr(obj.camera_elements, f"Panning_enabled_{i}")
+        sub.prop(obj.camera_elements, f"Panningx_hex_{i}")
+        sub.prop(obj.camera_elements, f"Panningy_hex_{i}")
+        
+        # Interpolate            
+        row = col.row(align = True)
+        sub = row.column()
+        sub.label(text="Interpolation")
+        sub = row.column()
+        sub.prop(obj.camera_elements, f"interpolate_{i}")            
+        
+        # Spacing
+        row = col.row(align=True)
+        row.prop(obj.camera_elements, f"spacing_enabled_{i}")
+        sub = row.column()
+        sub.enabled = getattr(obj.camera_elements, f"spacing_enabled_{i}")
+        sub.prop(obj.camera_elements, f"spacing_{i}")
+        
+        # Fog distance
+        row = col.row(align=True)
+        row.prop(obj.camera_elements, f"fog_distance_enabled_{i}")
+        sub = row.column()
+        sub.enabled = getattr(obj.camera_elements, f"fog_distance_enabled_{i}")
+        sub.prop(obj.camera_elements, f"fog_distance_hex_{i}")
+        
+        col.separator()
+        
+        # Transition
+        row = col.row(align=True)                                    
+        row.label(text="Transition:")                   
+        row.prop(obj.camera_elements, f"transition_type_{i}")            
+        
+        sub = col.row(align=True)
+        sub.enabled = getattr(obj.camera_elements, f"transition_type_{i}") != "-"
+        sub.label(text="Target cam:")
+        sub.prop(obj.camera_elements, f"transition_target_cam_{i}")            
+        
+        col.separator()
+        
+        # Warp in target
+        row = col.row(align=True)
+        row.label(text="Prop 198 type:")
+        row.prop(obj.camera_elements, f"warp_in_target_type_{i}")
+        
+        sub = col.row(align=True)
+        warp_type = getattr(obj.camera_elements, f"warp_in_target_type_{i}")
+        sub.enabled = warp_type in ("warp-in", "bonus warp-in")
+        sub.label(text="Marker:")
+        sub.prop(obj.camera_elements, f"warp_in_target_{i}")
+        
+        col.separator()
 
-            # Mirror
-            row = col.row(align=True)
-            row.prop(obj.camera_elements, f"mirror_enabled_{i}")
-            sub = row.column()
-            sub.enabled = getattr(obj.camera_elements, f"mirror_enabled_{i}")
-            sub.prop(obj.camera_elements, f"mirror_target_{i}")
+        # Water
+        row = col.row(align=True)
+        row.prop(obj.camera_elements, f"water_enabled_{i}")
+        sub = row.column()
+        sub.enabled = getattr(obj.camera_elements, f"water_enabled_{i}")
+        sub.prop(obj.camera_elements, f"water_target_{i}")
 
-            # Music
-            row = col.row(align=True)
-            row.prop(obj.camera_elements, f"music_enabled_{i}")
-            sub = row.column()
-            sub.enabled = getattr(obj.camera_elements, f"music_enabled_{i}")
-            sub.prop(obj.camera_elements, f"music_target_{i}")
+        # Mirror
+        row = col.row(align=True)
+        row.prop(obj.camera_elements, f"mirror_enabled_{i}")
+        sub = row.column()
+        sub.enabled = getattr(obj.camera_elements, f"mirror_enabled_{i}")
+        sub.prop(obj.camera_elements, f"mirror_target_{i}")
 
-            # Wavy
-            row = col.row(align=True)
-            split = row.split(factor=0.48)
-            split.prop(obj.camera_elements, f"wavy_enabled_{i}")
-            sub = split.row(align=True)
-            sub.enabled = getattr(obj.camera_elements, f"wavy_enabled_{i}")
-            sub.prop(obj.camera_elements, f"fxcontrol1_hex_{i}")
-            sub.prop(obj.camera_elements, f"fxcontrol2_hex_{i}")
+        # Music
+        row = col.row(align=True)
+        row.prop(obj.camera_elements, f"music_enabled_{i}")
+        sub = row.column()
+        sub.enabled = getattr(obj.camera_elements, f"music_enabled_{i}")
+        sub.prop(obj.camera_elements, f"music_target_{i}")
 
-            # Fade FX / Glow FX2
-            row = col.row(align=True)
-            row.prop(obj.camera_elements, f"fade_fx_enabled_{i}")
-            row.prop(obj.camera_elements, f"glow_fx2_enabled_{i}")
-            
-            # dark
-            row = col.row(align=True)
-            row.label(text="Dark")
-            row.prop(obj.camera_elements, f"dark_{i}")
-            
-            # cold
-            row = col.row(align=True)
-            row.label(text="Cold")
-            row.prop(obj.camera_elements, f"cold_{i}")
+        # Wavy
+        row = col.row(align=True)
+        split = row.split(factor=0.48)
+        split.prop(obj.camera_elements, f"wavy_enabled_{i}")
+        sub = split.row(align=True)
+        sub.enabled = getattr(obj.camera_elements, f"wavy_enabled_{i}")
+        sub.prop(obj.camera_elements, f"fxcontrol1_hex_{i}")
+        sub.prop(obj.camera_elements, f"fxcontrol2_hex_{i}")
 
-            col.separator()
+        # Fade FX / Glow FX2
+        row = col.row(align=True)
+        row.prop(obj.camera_elements, f"fade_fx_enabled_{i}")
+        row.prop(obj.camera_elements, f"glow_fx2_enabled_{i}")
+        
+        # dark
+        row = col.row(align=True)
+        row.label(text="Dark")
+        row.prop(obj.camera_elements, f"dark_{i}")
+        
+        # cold
+        row = col.row(align=True)
+        row.label(text="Cold")
+        row.prop(obj.camera_elements, f"cold_{i}")
             
 
 class CXF_PT_tools(Panel):
