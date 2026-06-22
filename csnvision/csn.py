@@ -21,7 +21,9 @@ importlib.reload(export_scenery)
 
 DEFAULT_ID = 10
 MAX_ARGS = 12
+MAX_VICTIMS = 8
 MAX_CAMERAS = 5
+MAX_NEIGHBOURS = 8
 
 class EntityProps(PropertyGroup):
     set_zone: StringProperty(
@@ -73,6 +75,58 @@ class EntityProps(PropertyGroup):
         description="Markers are used as targets for various things in CSNvision, but arent included in the NSF",
         default=False
     )
+
+    # Z-Index
+    prop_zindex_enabled: BoolProperty(
+        name="Z-Index",
+        description="Enable z-index property",
+        default=False
+    )
+    prop_zindex: IntProperty(
+        name="",
+        description="Z-index value",
+        default=0
+    )
+
+    # DDA
+    prop_dda_enabled: BoolProperty(
+        name="DDA",
+        description="Enable DDA section/count properties",
+        default=False
+    )
+    prop_dda_section: IntProperty(
+        name="S",
+        description="DDA section",
+        default=0
+    )
+    prop_dda_count: IntProperty(
+        name="C",
+        description="DDA count",
+        default=0
+    )
+
+    # C2E override
+    prop_c2e_override_pos_target: StringProperty(
+        name="",
+        description="C2E override position target (leave empty to skip export)",
+        default=""
+    )
+    prop_c2e_override_mult: IntProperty(
+        name="",
+        description="C2E override multiplier",
+        default=100
+    )
+
+    # Victims
+    prop_victim_count: IntProperty(
+        name="Victims:",
+        description="Set the number of victims.",
+        default=0,
+        min=0,
+        max=MAX_VICTIMS,
+        options={'SKIP_SAVE'}
+    )
+
     prop_arg_count: IntProperty(
         name="Arguments:",
         description="Set the number of arguments.",
@@ -87,7 +141,7 @@ class EntityProps(PropertyGroup):
         name="Instances:",
         description="Set the number of camera elements.\nShould match the number defined by the name.",
         default=0,
-        min=1,
+        min=0,
         max=MAX_CAMERAS,
         options={'SKIP_SAVE'}
     )
@@ -158,18 +212,25 @@ def make_camera_hex_setter(index, prop_name):
 class Arguments(PropertyGroup):
     pass
 
+class Victims(PropertyGroup):
+    pass
+
+class ZoneProps(PropertyGroup):
+    explicit_neighbour_count: IntProperty(
+        name="Explicit Neighbours:",
+        description="Set the number of explicit neighbours.",
+        default=0,
+        min=0,
+        max=MAX_NEIGHBOURS,
+        options={'SKIP_SAVE'}
+    )
+
 class CameraElements(PropertyGroup):
     pass
 
 
 class WorldProps(PropertyGroup):
-    fx: IntProperty(
-        name="FX",
-        description="World FX (0-3)",
-        default=0,
-        min=0,
-        max=3
-    )
+    pass
 
 # Generation
 
@@ -181,6 +242,20 @@ for i in range(MAX_ARGS):
         name=f"Arg {i + 1}",
         get=make_hex_getter(i),
         set=make_hex_setter(i)
+    )
+
+for i in range(MAX_VICTIMS):
+    Victims.__annotations__[f"victim_{i}"] = StringProperty(
+        name=f"Victim {i + 1}",
+        description=f"Victim name {i + 1}",
+        default=""
+    )
+
+for i in range(MAX_NEIGHBOURS):
+    ZoneProps.__annotations__[f"explicit_neighbour_{i}"] = StringProperty(
+        name=f"Neighbour {i + 1}",
+        description=f"Explicit neighbour zone name {i + 1}",
+        default=""
     )
 
 # Camera elements generation
@@ -407,6 +482,34 @@ for i in range(MAX_CAMERAS):
         default=""
     )
 
+    # Free move
+    CameraElements.__annotations__[f"freemove_enabled_{i}"] = BoolProperty(
+        name="Free Move",
+        description="Enable free move camera properties",
+        default=False
+    )
+    CameraElements.__annotations__[f"amount_value_{i}"] = IntProperty(default=0)
+    CameraElements.__annotations__[f"amount_hex_{i}"] = StringProperty(
+        name="",
+        description="Amount",
+        get=make_camera_hex_getter(i, "amount"),
+        set=make_camera_hex_setter(i, "amount")
+    )
+    CameraElements.__annotations__[f"max_follow_dist_value_{i}"] = IntProperty(default=0)
+    CameraElements.__annotations__[f"max_follow_dist_hex_{i}"] = StringProperty(
+        name="",
+        description="Max Follow Dist",
+        get=make_camera_hex_getter(i, "max_follow_dist"),
+        set=make_camera_hex_setter(i, "max_follow_dist")
+    )
+    CameraElements.__annotations__[f"follow_strength_value_{i}"] = IntProperty(default=0)
+    CameraElements.__annotations__[f"follow_strength_hex_{i}"] = StringProperty(
+        name="",
+        description="Follow Strength",
+        get=make_camera_hex_getter(i, "follow_strength"),
+        set=make_camera_hex_setter(i, "follow_strength")
+    )
+
 # Panels
 
 class CXF_PT_prop(Panel):
@@ -423,8 +526,7 @@ class CXF_PT_prop(Panel):
         layout = self.layout
         obj = context.object
 
-        if obj is None:
-            layout.label(text="No object selected")
+        if obj is None or not export_scenery.is_entity(obj):
             return
 
         props = obj.entity_props
@@ -453,6 +555,43 @@ class CXF_PT_prop(Panel):
         layout.prop(props, "prop_type")
         layout.prop(props, "prop_subtype")        
 
+        # Z-Index
+        row = layout.row(align=True)
+        row.prop(props, "prop_zindex_enabled")
+        sub = row.column()
+        sub.enabled = props.prop_zindex_enabled
+        sub.prop(props, "prop_zindex")
+
+        # DDA
+        row = layout.row(align=True)
+        row.prop(props, "prop_dda_enabled")
+        row.label(text="")
+        sub = row.row(align=True)
+        sub.enabled = props.prop_dda_enabled
+        sub.prop(props, "prop_dda_section")
+        sub.prop(props, "prop_dda_count")
+
+        layout.separator()
+
+        # C2E override
+        row = layout.row(align=True)
+        row.label(text="C2E Pos Target:")
+        row.prop(props, "prop_c2e_override_pos_target")
+
+        row = layout.row(align=True)
+        row.label(text="C2E Mult:")
+        sub = row.column()
+        sub.prop(props, "prop_c2e_override_mult")
+
+        # Victims
+        layout.use_property_split = True
+        layout.prop(props, "prop_victim_count")
+        layout.use_property_split = False
+
+        box = layout.box()
+        for i in range(props.prop_victim_count):
+            box.prop(obj.victims, f"victim_{i}")
+
         # arg count
         layout.use_property_split = True
         layout.prop(props, "prop_arg_count")
@@ -463,6 +602,7 @@ class CXF_PT_prop(Panel):
         for i in range(props.prop_arg_count):
             box.prop(obj.arguments, f"hex_{i}")
         layout.separator()
+
 
 class CXF_PT_camera(Panel):
     bl_label = "Camera Properties"
@@ -478,8 +618,7 @@ class CXF_PT_camera(Panel):
         layout = self.layout
         obj = context.object
 
-        if obj is None:
-            layout.label(text="No object selected")
+        if obj is None or not export_scenery.is_camera(obj):
             return
 
         props = obj.entity_props
@@ -489,11 +628,15 @@ class CXF_PT_camera(Panel):
         layout.prop(props, "cam_count")
         layout.use_property_split = False
 
-        # instance selector
+        # instance selector + copy/paste
         layout.use_property_split = True
         row = layout.row()
         row.prop(props, "cam_selected")
         layout.use_property_split = False
+
+        row = layout.row(align=True)
+        row.operator(CXF_OT_copy_cam_props.bl_idname, text="Copy Props")
+        row.operator(CXF_OT_paste_cam_props.bl_idname, text="Paste Props")
 
         if props.cam_count == 0:
             return
@@ -624,7 +767,49 @@ class CXF_PT_camera(Panel):
         row = col.row(align=True)
         row.label(text="Cold")
         row.prop(obj.camera_elements, f"cold_{i}")
+
+        # Free move
+        row = col.row(align=True)
+        split = row.split(factor=0.48)
+        split.prop(obj.camera_elements, f"freemove_enabled_{i}")
+        sub = split.row(align=True)
+        sub.enabled = getattr(obj.camera_elements, f"freemove_enabled_{i}")
+        sub.prop(obj.camera_elements, f"amount_hex_{i}")
+        sub.prop(obj.camera_elements, f"max_follow_dist_hex_{i}")
+        sub.prop(obj.camera_elements, f"follow_strength_hex_{i}")
             
+
+class CXF_PT_zone_properties(Panel):
+    bl_label = "Zone Properties"
+    bl_space_type = "VIEW_3D"
+    bl_region_type = "UI"
+    bl_category = "CSNvision"
+
+    def draw_header(self, context):
+        layout = self.layout
+        layout.label(icon='MESH_GRID')
+
+    def draw(self, context):
+        layout = self.layout
+        obj = context.object
+
+        if obj is None:
+            layout.label(text="No object selected")
+            return
+
+        if not hasattr(obj, 'zone_props') or not export_scenery.is_zone(obj):
+            return
+
+        zone = obj.zone_props
+
+        layout.use_property_split = True
+        layout.prop(zone, "explicit_neighbour_count")
+        layout.use_property_split = False
+
+        box = layout.box()
+        for i in range(zone.explicit_neighbour_count):
+            box.prop(zone, f"explicit_neighbour_{i}")
+
 
 class CXF_PT_tools(Panel):
     bl_label = "Utilities"
@@ -682,12 +867,9 @@ class CXF_PT_world_properties(Panel):
 
         # only show for world meshes
         if not hasattr(obj, 'world_props') or not export_scenery.is_world(obj):
-            layout.label(text="Select a world mesh")
             return
 
-        props = obj.world_props
-
-        layout.prop(props, "fx")
+        pass  # world props panel kept for future use
 
 # Execute
 
@@ -743,12 +925,15 @@ class CXF_OT_copy_props(Operator):
 
         data = {
             "zone": props.set_zone,
-            "name": props.prop_name,
             "id": props.prop_id if props.prop_id_enabled else None,
             "type": props.prop_type,
             "subtype": props.prop_subtype,
             "elevtype": props.prop_elevtype,
             "marker": props.prop_marker,
+            "victims": [
+                getattr(context.object.victims, f"victim_{i}")
+                for i in range(props.prop_victim_count)
+            ],
             "arguments": [
                 getattr(context.object.arguments, f"value_{i}") & 0xFFFFFFFF
                 for i in range(props.prop_arg_count)
@@ -787,6 +972,11 @@ class CXF_OT_paste_props(Operator):
                 props.prop_elevtype = data.get("elevtype", "-")
                 props.prop_marker = data.get("marker", False)
 
+                victims = data.get("victims", [])
+                props.prop_victim_count = min(len(victims), MAX_VICTIMS)
+                for i, value in enumerate(victims[:MAX_VICTIMS]):
+                    setattr(obj.victims, f"victim_{i}", value)
+
                 args = data.get("arguments", [])
                 props.prop_arg_count = min(len(args), MAX_ARGS)
                 for i, value in enumerate(args[:MAX_ARGS]):
@@ -807,6 +997,134 @@ class CXF_OT_paste_props(Operator):
                 return {'CANCELLED'}
 
         self.report({'INFO'}, "Properties pasted")
+        return {'FINISHED'}
+
+
+class CXF_OT_copy_cam_props(Operator):
+    """Copy camera properties from the currently selected instance"""
+    bl_idname = "object.copy_cam_props"
+    bl_label = "Copy Camera Instance"
+
+    def execute(self, context):
+        obj = context.object
+        if obj is None:
+            self.report({'WARNING'}, "No object selected")
+            return {'CANCELLED'}
+
+        props = obj.entity_props
+        i = props.cam_selected - 1
+        cam = obj.camera_elements
+
+        data = {
+            "cam_props": {
+                "mode":                  getattr(cam, f"mode_{i}"),
+                "panning_enabled":       getattr(cam, f"Panning_enabled_{i}"),
+                "panningx":              getattr(cam, f"Panningx_value_{i}") & 0xFFFFFFFF,
+                "panningy":              getattr(cam, f"Panningy_value_{i}") & 0xFFFFFFFF,
+                "distance_enabled":      getattr(cam, f"distance_enabled_{i}"),
+                "distance":              getattr(cam, f"distance_value_{i}") & 0xFFFFFFFF,
+                "spacing_enabled":       getattr(cam, f"spacing_enabled_{i}"),
+                "spacing":               getattr(cam, f"spacing_{i}"),
+                "fog_distance_enabled":  getattr(cam, f"fog_distance_enabled_{i}"),
+                "fog_distance":          getattr(cam, f"fog_distance_value_{i}") & 0xFFFFFFFF,
+                "water_enabled":         getattr(cam, f"water_enabled_{i}"),
+                "water_target":          getattr(cam, f"water_target_{i}"),
+                "mirror_enabled":        getattr(cam, f"mirror_enabled_{i}"),
+                "mirror_target":         getattr(cam, f"mirror_target_{i}"),
+                "music_enabled":         getattr(cam, f"music_enabled_{i}"),
+                "music_target":          getattr(cam, f"music_target_{i}"),
+                "wavy_enabled":          getattr(cam, f"wavy_enabled_{i}"),
+                "fxcontrol1":            getattr(cam, f"fxcontrol1_value_{i}") & 0xFFFFFFFF,
+                "fxcontrol2":            getattr(cam, f"fxcontrol2_value_{i}") & 0xFFFFFFFF,
+                "fade_fx_enabled":       getattr(cam, f"fade_fx_enabled_{i}"),
+                "glow_fx2_enabled":      getattr(cam, f"glow_fx2_enabled_{i}"),
+                "dark":                  getattr(cam, f"dark_{i}"),
+                "cold":                  getattr(cam, f"cold_{i}"),
+                "interpolate":           getattr(cam, f"interpolate_{i}"),
+                "transition_type":       getattr(cam, f"transition_type_{i}"),
+                "transition_target_cam": getattr(cam, f"transition_target_cam_{i}"),
+                "warp_in_target_type":   getattr(cam, f"warp_in_target_type_{i}"),
+                "warp_in_target":        getattr(cam, f"warp_in_target_{i}"),
+                "freemove_enabled":      getattr(cam, f"freemove_enabled_{i}"),
+                "amount":                getattr(cam, f"amount_value_{i}") & 0xFFFFFFFF,
+                "max_follow_dist":       getattr(cam, f"max_follow_dist_value_{i}") & 0xFFFFFFFF,
+                "follow_strength":       getattr(cam, f"follow_strength_value_{i}") & 0xFFFFFFFF,
+            }
+        }
+
+        context.window_manager.clipboard = json.dumps(data, indent=2)
+        self.report({'INFO'}, f"Camera instance #{i + 1} copied")
+        return {'FINISHED'}
+
+
+class CXF_OT_paste_cam_props(Operator):
+    """Paste camera properties to the currently selected instance on all selected objects"""
+    bl_idname = "object.paste_cam_props"
+    bl_label = "Paste Camera Instance"
+
+    def execute(self, context):
+        obj = context.object
+        if obj is None:
+            self.report({'WARNING'}, "No object selected")
+            return {'CANCELLED'}
+
+        try:
+            data = json.loads(context.window_manager.clipboard)
+        except Exception as e:
+            self.report({'ERROR'}, f"Invalid clipboard data: {e}")
+            return {'CANCELLED'}
+
+        if "cam_props" not in data:
+            self.report({'ERROR'}, "Clipboard does not contain camera properties")
+            return {'CANCELLED'}
+
+        cp = data["cam_props"]
+
+        def uint32_to_int32(v):
+            return v - 0x100000000 if v >= 0x80000000 else v
+
+        for target_obj in context.selected_objects:
+            i = target_obj.entity_props.cam_selected - 1
+            cam = target_obj.camera_elements
+
+            try:
+                setattr(cam, f"mode_{i}",                  cp.get("mode", "AUTO"))
+                setattr(cam, f"Panning_enabled_{i}",       cp.get("panning_enabled", False))
+                setattr(cam, f"Panningx_value_{i}",        uint32_to_int32(cp.get("panningx", 0x40)))
+                setattr(cam, f"Panningy_value_{i}",        uint32_to_int32(cp.get("panningy", 0x40)))
+                setattr(cam, f"distance_enabled_{i}",      cp.get("distance_enabled", False))
+                setattr(cam, f"distance_value_{i}",        uint32_to_int32(cp.get("distance", 0x600)))
+                setattr(cam, f"spacing_enabled_{i}",       cp.get("spacing_enabled", False))
+                setattr(cam, f"spacing_{i}",               cp.get("spacing", 200))
+                setattr(cam, f"fog_distance_enabled_{i}",  cp.get("fog_distance_enabled", False))
+                setattr(cam, f"fog_distance_value_{i}",    uint32_to_int32(cp.get("fog_distance", 0)))
+                setattr(cam, f"water_enabled_{i}",         cp.get("water_enabled", False))
+                setattr(cam, f"water_target_{i}",          cp.get("water_target", ""))
+                setattr(cam, f"mirror_enabled_{i}",        cp.get("mirror_enabled", False))
+                setattr(cam, f"mirror_target_{i}",         cp.get("mirror_target", ""))
+                setattr(cam, f"music_enabled_{i}",         cp.get("music_enabled", False))
+                setattr(cam, f"music_target_{i}",          cp.get("music_target", ""))
+                setattr(cam, f"wavy_enabled_{i}",          cp.get("wavy_enabled", False))
+                setattr(cam, f"fxcontrol1_value_{i}",      uint32_to_int32(cp.get("fxcontrol1", 0)))
+                setattr(cam, f"fxcontrol2_value_{i}",      uint32_to_int32(cp.get("fxcontrol2", 0x14)))
+                setattr(cam, f"fade_fx_enabled_{i}",       cp.get("fade_fx_enabled", False))
+                setattr(cam, f"glow_fx2_enabled_{i}",      cp.get("glow_fx2_enabled", False))
+                setattr(cam, f"dark_{i}",                  cp.get("dark", "AUTO"))
+                setattr(cam, f"cold_{i}",                  cp.get("cold", "AUTO"))
+                setattr(cam, f"interpolate_{i}",           cp.get("interpolate", "AUTO"))
+                setattr(cam, f"transition_type_{i}",       cp.get("transition_type", "-"))
+                setattr(cam, f"transition_target_cam_{i}", cp.get("transition_target_cam", ""))
+                setattr(cam, f"warp_in_target_type_{i}",   cp.get("warp_in_target_type", "-"))
+                setattr(cam, f"warp_in_target_{i}",        cp.get("warp_in_target", ""))
+                setattr(cam, f"freemove_enabled_{i}",      cp.get("freemove_enabled", False))
+                setattr(cam, f"amount_value_{i}",          uint32_to_int32(cp.get("amount", 0)))
+                setattr(cam, f"max_follow_dist_value_{i}", uint32_to_int32(cp.get("max_follow_dist", 0)))
+                setattr(cam, f"follow_strength_value_{i}", uint32_to_int32(cp.get("follow_strength", 0)))
+            except Exception as e:
+                self.report({'ERROR'}, str(e))
+                return {'CANCELLED'}
+
+        self.report({'INFO'}, "Camera instance pasted")
         return {'FINISHED'}
 
 

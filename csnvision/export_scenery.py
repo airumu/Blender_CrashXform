@@ -62,21 +62,27 @@ def export_mesh(obj, depsgraph):
         if mesh.uv_layers else None
     )
 
+    # Build a vertex-group-index → fx value map for fx_1/fx_2/fx_3 groups.
+    # Vertex groups live on the original (non-evaluated) object.
+    fx_group_map = {}
+    for vg in obj.vertex_groups:
+        if vg.name == 'fx_1':
+            fx_group_map[vg.index] = 1
+        elif vg.name == 'fx_2':
+            fx_group_map[vg.index] = 2
+        elif vg.name == 'fx_3':
+            fx_group_map[vg.index] = 3
+
     # vertices
     vertices = []
-    fx_val = None
-    if hasattr(obj, "world_props"):
-        try:
-            fx = getattr(obj.world_props, "fx", 0)
-            if fx is not None and fx != 0:
-                fx_val = int(fx)
-        except Exception:
-            fx_val = None
     for v in mesh.vertices:
         world_pos = world_mat @ v.co
         vert = {"pos": yup_pos(world_pos)}
-        if fx_val is not None:
-            vert["fx"] = fx_val
+        # Check if this vertex belongs to any fx group; first match wins.
+        for g in v.groups:
+            if g.group in fx_group_map:
+                vert["fx"] = fx_group_map[g.group]
+                break
         vertices.append(vert)
 
     # faces
@@ -266,6 +272,10 @@ def export_camera_info(obj):
         transition_type = getattr(obj.camera_elements, f"transition_type_{i}", None)
         warp_in_target_type = getattr(obj.camera_elements, f"warp_in_target_type_{i}", "-")
         warp_in_target_marker = getattr(obj.camera_elements, f"warp_in_target_{i}", "")
+        enabled_freemove = getattr(obj.camera_elements, f"freemove_enabled_{i}", False)
+        freemove_amount = getattr(obj.camera_elements, f"amount_value_{i}", 0)
+        freemove_max_follow_dist = getattr(obj.camera_elements, f"max_follow_dist_value_{i}", 0)
+        freemove_follow_strength = getattr(obj.camera_elements, f"follow_strength_value_{i}", 0)
         
         elements.append({
             "mode": getattr(obj.camera_elements, f"mode_{i}", None),
@@ -291,6 +301,11 @@ def export_camera_info(obj):
             "interpolate": getattr(obj.camera_elements, f"interpolate_{i}", None),
             "warp_in_target_type": warp_in_target_type if warp_in_target_type != '-' else None,
             "warp_in_target_marker": warp_in_target_marker if warp_in_target_type != '-' else None,
+            "freemove": {
+                "amount": freemove_amount & 0xFFFFFFFF,
+                "max_follow_dist": freemove_max_follow_dist & 0xFFFFFFFF,
+                "follow_strength": freemove_follow_strength & 0xFFFFFFFF,
+            } if enabled_freemove else None,
         })
 
     return elements
@@ -333,9 +348,38 @@ def export_entity(obj, depsgraph):
             for i in range(props.prop_arg_count)
         ],
         "positions": positions,
+        "zindex": props.prop_zindex if props.prop_zindex_enabled else None,
+        "dda_section": props.prop_dda_section if props.prop_dda_enabled else None,
+        "dda_count": props.prop_dda_count if props.prop_dda_enabled else None,
+        "c2e_override_pos_target": props.prop_c2e_override_pos_target if props.prop_c2e_override_pos_target else None,
+        "c2e_override_mult": props.prop_c2e_override_mult,
+        "victims": [
+            getattr(obj.victims, f"victim_{i}")
+            for i in range(props.prop_victim_count)
+            if getattr(obj.victims, f"victim_{i}", "").strip()
+        ] or None,
     }
 
     return data
+
+# zone export
+def export_zone(obj, depsgraph):
+    data = export_mesh(obj, depsgraph)
+    if data is None:
+        return None
+
+    if hasattr(obj, 'zone_props'):
+        zone = obj.zone_props
+        neighbours = [
+            getattr(zone, f"explicit_neighbour_{i}")
+            for i in range(zone.explicit_neighbour_count)
+            if getattr(zone, f"explicit_neighbour_{i}", "").strip()
+        ] or None
+        if neighbours is not None:
+            data["explicit_neighbours"] = neighbours
+
+    return data
+
 
 def get_curve_points(children, depsgraph):
     points_world = []
@@ -444,7 +488,7 @@ def export_scene(context):
             continue
         
         if is_zone(obj):
-            data = export_mesh(obj, depsgraph)
+            data = export_zone(obj, depsgraph)
             if data is not None:
                 scene_data["zones"].append(data)
             continue
