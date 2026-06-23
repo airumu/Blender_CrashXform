@@ -162,15 +162,20 @@ def export_mesh(obj, depsgraph):
     if is_zone(obj):
         type = "zone"
 
-    return {
+    result = {
         "type":  type,
         "name":  obj.name,
         "verts": vertices,
         "faces": faces,
     }
 
+    if is_world(obj) and hasattr(obj, 'world_props') and obj.world_props.skybox:
+        result["skybox"] = True
 
-def merge_meshes(mesh_list, collection_name):
+    return result
+
+
+def merge_meshes(mesh_list, collection_name, skybox=False):
     """Merge multiple mesh exports into a single mesh."""
     if not mesh_list:
         return None
@@ -191,12 +196,17 @@ def merge_meshes(mesh_list, collection_name):
         
         vertex_offset += len(mesh_data["verts"])
     
-    return {
+    result = {
         "type": "world",
         "name": collection_name,
         "verts": merged_verts,
         "faces": merged_faces,
     }
+
+    if skybox:
+        result["skybox"] = True
+
+    return result
 
 
 # camera export
@@ -481,6 +491,7 @@ def export_scene(context):
         raise RuntimeError("The .blend file has not been saved yet.")
 
     world_meshes_by_collection = {}
+    world_skybox_by_collection = {}
     
     for obj in bpy.data.objects:
         if is_entity(obj):
@@ -499,6 +510,10 @@ def export_scene(context):
             
             if collection_key not in world_meshes_by_collection:
                 world_meshes_by_collection[collection_key] = []
+                world_skybox_by_collection[collection_key] = False
+
+            if hasattr(obj, 'world_props') and obj.world_props.skybox:
+                world_skybox_by_collection[collection_key] = True
             
             data = export_mesh(obj, depsgraph)
             if data is not None:
@@ -526,11 +541,12 @@ def export_scene(context):
     # Add grouped world meshes to scene_data
     for collection_name, meshes in world_meshes_by_collection.items():
         if meshes:
+            skybox = world_skybox_by_collection.get(collection_name, False)
             if collection_name == "worlds":
                 for mesh in meshes:
                     scene_data["meshes"].append(mesh)
             else:
-                merged = merge_meshes(meshes, collection_name)
+                merged = merge_meshes(meshes, collection_name, skybox=skybox)
                 if merged is not None:
                     scene_data["meshes"].append(merged)
 

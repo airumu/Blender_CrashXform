@@ -41,6 +41,7 @@ classes = [
     csn.Arguments,
     csn.Victims,
     csn.CameraElements,
+    csn.CXF_PT_world_properties,
     csn.CXF_PT_zone_properties,
     csn.CXF_PT_prop,
     csn.CXF_PT_camera,

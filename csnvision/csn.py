@@ -230,7 +230,11 @@ class CameraElements(PropertyGroup):
 
 
 class WorldProps(PropertyGroup):
-    pass
+    skybox: BoolProperty(
+        name="Skybox",
+        description="Mark this world mesh as a skybox",
+        default=False
+    )
 
 # Generation
 
@@ -869,7 +873,7 @@ class CXF_PT_world_properties(Panel):
         if not hasattr(obj, 'world_props') or not export_scenery.is_world(obj):
             return
 
-        pass  # world props panel kept for future use
+        layout.prop(obj.world_props, "skybox")
 
 # Execute
 
