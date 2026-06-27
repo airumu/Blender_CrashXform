@@ -606,6 +606,10 @@ class CXF_PT_prop(Panel):
         for i in range(props.prop_arg_count):
             box.prop(obj.arguments, f"hex_{i}")
         layout.separator()
+    
+        row = layout.row(align=True)
+        row.operator(CXF_OT_copy_props.bl_idname, text="Copy Props")
+        row.operator(CXF_OT_paste_props.bl_idname, text="Paste Props")
 
 
 class CXF_PT_camera(Panel):
@@ -830,9 +834,6 @@ class CXF_PT_tools(Panel):
         obj = context.object
 
         layout.operator(CXF_OT_reassing_ids.bl_idname, text="Reassign Entity IDs")
-        layout.separator()
-        layout.operator(CXF_OT_copy_props.bl_idname, text="Copy Properties")
-        layout.operator(CXF_OT_paste_props.bl_idname, text="Paste Properties")
 
 class CXF_PT_export_scenery(Panel):
     bl_label = "Export"
@@ -916,7 +917,7 @@ class CXF_OT_reassing_ids(Operator):
         return {'FINISHED'}
 
 class CXF_OT_copy_props(Operator):
-    """Copy properties from the active object"""
+    """Copy properties from the active entity"""
     bl_idname = "object.copy_props"
     bl_label = "Copy Properties"
 

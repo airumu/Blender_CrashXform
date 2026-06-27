@@ -2,16 +2,18 @@ import bpy
 import json
 import math
 import os
+import time
+import numpy as np
 
 # helpers
-def r4(values):
-    return [round(x, 4) for x in values]
+def r2(values):
+    return [round(x, 2) for x in values]
 
 def yup_pos(v):
-    return r4([v[0] * 400, -v[1] * 400, v[2] * 400])
+    return r2([v[0] * 400, -v[1] * 400, v[2] * 400])
 
 def yup_euler_deg(euler):
-    return r4([
+    return r2([
         math.degrees(euler[0]),
         math.degrees(euler[1]),
         math.degrees(euler[2]),
@@ -39,16 +41,16 @@ def get_loop_color(mesh, loop_idx, vertex_index):
     for attr in mesh.color_attributes:
 
         if attr.domain == 'CORNER':
-            return r4(attr.data[loop_idx].color)
+            return r2(attr.data[loop_idx].color)
 
         elif attr.domain == 'POINT':
-            return r4(attr.data[vertex_index].color)
+            return r2(attr.data[vertex_index].color)
 
     return None
 
 
-# mesh export
-def export_mesh(obj, depsgraph):
+def export_mesh(obj, depsgraph, exp_type):
+    import numpy as np
     try:
         obj_eval = obj.evaluated_get(depsgraph)
         mesh     = obj_eval.to_mesh()
@@ -63,7 +65,6 @@ def export_mesh(obj, depsgraph):
     )
 
     # Build a vertex-group-index → fx value map for fx_1/fx_2/fx_3 groups.
-    # Vertex groups live on the original (non-evaluated) object.
     fx_group_map = {}
     for vg in obj.vertex_groups:
         if vg.name == 'fx_1':
@@ -73,97 +74,129 @@ def export_mesh(obj, depsgraph):
         elif vg.name == 'fx_3':
             fx_group_map[vg.index] = 3
 
-    # vertices
+    # ==========================================
+    # 1. OPTIMIZED VERTICES EXTRACTION
+    # ==========================================
+    # Transform the temporary mesh to world space instantly at the C-layer
+    mesh.transform(world_mat)
+
+    num_verts = len(mesh.vertices)
+    co_flat = np.empty(num_verts * 3, dtype=np.float32)
+    mesh.vertices.foreach_get("co", co_flat)
+
+    # Reshape and perform Y-up swizzling, scaling, and rounding using NumPy
+    coords = co_flat.reshape(num_verts, 3)
+    coords[:, 0] *= 400   # X * 400
+    coords[:, 1] *= -400  # -Y * 400
+    coords[:, 2] *= 400   # Z * 400
+    coords = np.round(coords, 3)
+    coords_list = coords.tolist()
+
     vertices = []
-    for v in mesh.vertices:
-        world_pos = world_mat @ v.co
-        vert = {"pos": yup_pos(world_pos)}
-        # Check if this vertex belongs to any fx group; first match wins.
+    for i in range(num_verts):
+        vert = {"p": r2(coords_list[i])}
+        v = mesh.vertices[i]
         for g in v.groups:
             if g.group in fx_group_map:
                 vert["fx"] = fx_group_map[g.group]
                 break
         vertices.append(vert)
 
-    # faces
+    # ==========================================
+    # 2. PRE-EXTRACT FACE STRUCTURE & LOOKUPS
+    # ==========================================
     faces         = []
     skipped_count = 0
 
-    for poly in mesh.polygons:
-        n = len(poly.loop_indices)
+    num_polys = len(mesh.polygons)
+    num_loops = len(mesh.loops)
 
+    poly_loop_starts = np.empty(num_polys, dtype=np.int32)
+    poly_loop_totals = np.empty(num_polys, dtype=np.int32)
+    poly_mat_indices = np.empty(num_polys, dtype=np.int32)
+
+    mesh.polygons.foreach_get("loop_start", poly_loop_starts)
+    mesh.polygons.foreach_get("loop_total", poly_loop_totals)
+    mesh.polygons.foreach_get("material_index", poly_mat_indices)
+
+    loop_vert_indices = np.empty(num_loops, dtype=np.int32)
+    mesh.loops.foreach_get("vertex_index", loop_vert_indices)
+
+    # Pre-cache materials and texture lookups
+    mat_cache = {}
+    for i, mat in enumerate(mesh.materials):
+        if mat is not None:
+            mat_cache[i] = {
+                "name": mat.name,
+                "texture": get_texture_name(mat)
+            }
+
+    # Pre-extract UVs globally using NumPy
+    uv_data = None
+    if uv_layer:
+        uv_flat = np.empty(num_loops * 2, dtype=np.float32)
+        uv_layer.data.foreach_get("uv", uv_flat)
+        uv_data = np.round(uv_flat.reshape(num_loops, 2), 3).tolist()
+
+    # Pre-extract Vertex Colors safely (Find the first valid layer like the old script)
+    has_colors = False
+    color_data = None
+    color_domain = None
+
+    for attr in mesh.color_attributes:
+        if attr.data_type in {'FLOAT_COLOR', 'BYTE_COLOR'}:
+            has_colors = True
+            color_domain = attr.domain
+            color_flat = np.empty(len(attr.data) * 4, dtype=np.float32)
+            attr.data.foreach_get("color", color_flat)
+            color_data = np.round(color_flat.reshape(-1, 4), 3).tolist()
+            break # Match original behavior: first matching color attribute wins
+
+    # ==========================================
+    # 3. ITERATION OVER POLYGONS
+    # ==========================================
+    for i in range(num_polys):
+        n = int(poly_loop_totals[i])
         if n not in (3, 4):
             skipped_count += 1
             continue
 
-        face = {
-            "verts": list(poly.vertices)
-        }
+        start = int(poly_loop_starts[i])
+        end = start + n
+        poly_loops = slice(start, end)
+        verts = loop_vert_indices[poly_loops].tolist()
 
-        # material / texture
-        mat = (
-            mesh.materials[poly.material_index]
-            if poly.material_index < len(mesh.materials)
-            else None
-        )
+        face = {"verts": verts}
 
-        if mat is not None:
-            face["material"] = mat.name 
+        # Cached material & texture lookup
+        mat_idx = int(poly_mat_indices[i])
+        if mat_idx in mat_cache:
+            m_info = mat_cache[mat_idx]
+            face["material"] = m_info["name"]
+            if m_info["texture"] is not None:
+                face["texture"] = m_info["texture"]
 
-        texture = get_texture_name(mat)
-        if texture is not None:
-            face["texture"] = texture
+        # Fast sliced UV extraction
+        if uv_data is not None:
+            face["uvs"] = uv_data[poly_loops]
 
-        # UVs
-        if uv_layer:
-            face["uvs"] = [
-
-                r4(
-                    uv_layer.data[loop_idx].uv
-                )
-
-                for loop_idx
-                in poly.loop_indices
-            ]
-
-        # colors
-        colors = []
-        for loop_idx in poly.loop_indices:
-            loop = mesh.loops[loop_idx]
-
-            color = get_loop_color(
-                mesh,
-                loop_idx,
-                loop.vertex_index
-            )
-
-            colors.append(color)
-
-        if any(
-            c is not None
-            for c in colors
-        ):
-            face["colors"] = colors
+        # Fast sliced Vertex Color extraction
+        if has_colors:
+            if color_domain == 'CORNER':
+                face["colors"] = color_data[poly_loops]
+            elif color_domain == 'POINT':
+                face["colors"] = [color_data[v_idx] for v_idx in verts]
 
         faces.append(face)
 
     if skipped_count:
         print(f"[WARN] Mesh '{obj.name}': skipped {skipped_count} face(s) "
-              f"that were neither triangles nor quads (n-gons). "
-              f"Consider triangulating the mesh before export.")
+              f"that were neither triangles nor quads (n-gons). ")
 
-    obj_eval.to_mesh_clear()
-    
-    type = ""
-    if is_world(obj):
-        type = "world"
-    if is_collision(obj):
-        type = "collision"
-    if is_zone(obj):
-        type = "zone"
+    obj_eval.to_mesh_clear()    
 
     result = {
-        "type":  type,
+        "type":  exp_type,
         "name":  obj.name,
         "verts": vertices,
         "faces": faces,
@@ -374,7 +407,7 @@ def export_entity(obj, depsgraph):
 
 # zone export
 def export_zone(obj, depsgraph):
-    data = export_mesh(obj, depsgraph)
+    data = export_mesh(obj, depsgraph, "zone")
     if data is None:
         return None
 
@@ -410,28 +443,9 @@ def get_curve_points(children, depsgraph):
 
 
 # json serializer
-def dump_compact(obj, indent=2, level=0):
-    pad  = ' ' * (indent * level)
-    pad1 = ' ' * (indent * (level + 1))
-
-    if isinstance(obj, dict):
-        if not obj:
-            return '{}'
-        pairs = [f'{pad1}{json.dumps(k)}: {dump_compact(v, indent, level + 1)}'
-                 for k, v in obj.items()]
-        return '{\n' + ',\n'.join(pairs) + '\n' + pad + '}'
-
-    if isinstance(obj, list):
-        if not obj:
-            return '[]'
-        # All scalars → one line
-        if all(isinstance(x, (int, float, str, bool, type(None))) for x in obj):
-            return '[' + ', '.join(json.dumps(x) for x in obj) + ']'
-        # Mixed / nested → each element on its own indented line
-        items = [f'{pad1}{dump_compact(v, indent, level + 1)}' for v in obj]
-        return '[\n' + ',\n'.join(items) + '\n' + pad + ']'
-
-    return json.dumps(obj)
+def dump_compact(obj):
+    # separators=(',', ':') removes spaces after commas and colons, producing a completely minified string
+    return json.dumps(obj, separators=(',', ':'))
 
 
 def get_collections(obj):
@@ -483,6 +497,8 @@ def is_camera(obj):
 # main
 def export_scene(context):
     print("export_scene")
+    
+    start_time = time.perf_counter()
     depsgraph = bpy.context.evaluated_depsgraph_get()
     scene_data = {"meshes": [], "zones": [], "entities": [], "cameras": [],  "cam_curves": []}
 
@@ -515,13 +531,13 @@ def export_scene(context):
             if hasattr(obj, 'world_props') and obj.world_props.skybox:
                 world_skybox_by_collection[collection_key] = True
             
-            data = export_mesh(obj, depsgraph)
+            data = export_mesh(obj, depsgraph, "world")
             if data is not None:
                 world_meshes_by_collection[collection_key].append(data)
             continue
         
         if is_collision(obj):
-            data = export_mesh(obj, depsgraph)
+            data = export_mesh(obj, depsgraph, "collision")
             if data is not None:
                 scene_data["meshes"].append(data)
             continue
@@ -557,7 +573,8 @@ def export_scene(context):
     with open(abs_path, 'w', encoding='utf-8') as f:
         f.write(dump_compact(scene_data))
 
+    end_time = time.perf_counter()
     mesh_count   = len(scene_data["meshes"])
     camera_count = len(scene_data["cameras"])
-    print(f"[INFO] Export complete → {abs_path}")
+    print(f"[INFO] Export complete → {abs_path} in {(end_time-start_time):0.3f}s")
     print(f"       {mesh_count} mesh(es), {camera_count} camera(s) written.")
