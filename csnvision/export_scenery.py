@@ -294,9 +294,12 @@ def export_camera_info(obj):
         enabled_water = getattr(obj.camera_elements, f"water_enabled_{i}", False)
         enabled_mirror = getattr(obj.camera_elements, f"mirror_enabled_{i}", False)
         enabled_music = getattr(obj.camera_elements, f"music_enabled_{i}", False)
+        enabled_stars = getattr(obj.camera_elements, f"stars_enabled_{i}", False)
         enabled_wavy = getattr(obj.camera_elements, f"wavy_enabled_{i}", False)
         enabled_fade = getattr(obj.camera_elements, f"fade_fx_enabled_{i}", False)
         enabled_glow = getattr(obj.camera_elements, f"glow_fx2_enabled_{i}", False)
+        enabled_bonus = getattr(obj.camera_elements, f"bonus_{i}", False)
+        enabled_consider_2d = getattr(obj.camera_elements, f"consider_2D_{i}", False)
         dark_val = getattr(obj.camera_elements, f"dark_{i}", None)
         cold_val = getattr(obj.camera_elements, f"cold_{i}", None)
         enabled_fog = getattr(obj.camera_elements, f"fog_distance_enabled_{i}", False)
@@ -308,17 +311,28 @@ def export_camera_info(obj):
         water_target = getattr(obj.camera_elements, f"water_target_{i}", "")
         mirror_target = getattr(obj.camera_elements, f"mirror_target_{i}", "")
         music_target = getattr(obj.camera_elements, f"music_target_{i}", "")
+        stars_amount = getattr(obj.camera_elements, f"stars_amount_{i}", 0)
+        stars_offset = getattr(obj.camera_elements, f"stars_offset_{i}", 0)
+        stars_zindex = getattr(obj.camera_elements, f"stars_zindex_{i}", 0)
+        stars_distribution = getattr(obj.camera_elements, f"stars_distribution_{i}", 0)
         fxcontrol1_val = getattr(obj.camera_elements, f"fxcontrol1_value_{i}", 0)
         fxcontrol2_val = getattr(obj.camera_elements, f"fxcontrol2_value_{i}", 0)
         transition_target_cam = getattr(obj.camera_elements, f"transition_target_cam_{i}", "")
         fog_distance_val = getattr(obj.camera_elements, f"fog_distance_value_{i}", 0)
         transition_type = getattr(obj.camera_elements, f"transition_type_{i}", None)
+        transition_smooth = getattr(obj.camera_elements, f"transition_smooth_{i}", False)
         warp_in_target_type = getattr(obj.camera_elements, f"warp_in_target_type_{i}", "-")
         warp_in_target_marker = getattr(obj.camera_elements, f"warp_in_target_{i}", "")
         enabled_freemove = getattr(obj.camera_elements, f"freemove_enabled_{i}", False)
         freemove_amount = getattr(obj.camera_elements, f"amount_value_{i}", 0)
         freemove_max_follow_dist = getattr(obj.camera_elements, f"max_follow_dist_value_{i}", 0)
         freemove_follow_strength = getattr(obj.camera_elements, f"follow_strength_value_{i}", 0)
+        enabled_particles = getattr(obj.camera_elements, f"particles_enabled_{i}", False)
+        particles_amount = getattr(obj.camera_elements, f"particles_amount_{i}", 0)
+        particles_yoffset = getattr(obj.camera_elements, f"particles_yoffset_{i}", 0)
+        particles_velx = getattr(obj.camera_elements, f"particles_velx_{i}", 0)
+        particles_vely = getattr(obj.camera_elements, f"particles_vely_{i}", 0)
+        particles_velz = getattr(obj.camera_elements, f"particles_velz_{i}", 0)
         
         elements.append({
             "mode": getattr(obj.camera_elements, f"mode_{i}", None),
@@ -328,9 +342,11 @@ def export_camera_info(obj):
             "spacing": spacing_val if enabled_spacing else None,
             "water": water_target if enabled_water else None,
             "mirror": mirror_target if enabled_mirror else None,
-            "music": music_target if enabled_music else None,
+            "music": music_target if enabled_music else None,            
             "fadein_fx1": True if enabled_fade else None,
             "glow_fx2": True if enabled_glow else None,
+            "bonus": True if enabled_bonus else None,
+            "consider_2D": True if enabled_consider_2d else None,
             "dark": dark_val,
             "cold": cold_val,
             "fog_distance": fog_distance_val & 0xFFFFFFFF if enabled_fog else None,
@@ -340,6 +356,7 @@ def export_camera_info(obj):
             "transition": {
                 "target_cam": transition_target_cam,
                 "type": transition_type,
+                "smooth": transition_smooth,
             } if transition_type != "-" else None,
             "interpolate": getattr(obj.camera_elements, f"interpolate_{i}", None),
             "warp_in_target_type": warp_in_target_type if warp_in_target_type != '-' else None,
@@ -349,6 +366,18 @@ def export_camera_info(obj):
                 "max_follow_dist": freemove_max_follow_dist & 0xFFFFFFFF,
                 "follow_strength": freemove_follow_strength & 0xFFFFFFFF,
             } if enabled_freemove else None,
+            "particles": {
+                "amount": particles_amount & 0xFFFFFFFF,
+                "yoffset": particles_yoffset & 0xFFFFFFFF,
+                "velx": particles_velx & 0xFFFFFFFF,
+                "vely": particles_vely & 0xFFFFFFFF,
+                "velz": particles_velz & 0xFFFFFFFF,
+            } if enabled_particles else None,"stars": {
+                "amount": stars_amount & 0xFFFFFFFF,
+                "offset": stars_offset & 0xFFFFFFFF,
+                "zindex": stars_zindex & 0xFFFFFFFF,
+                "distribution": stars_distribution & 0xFFFFFFFF,
+            } if enabled_stars else None,
         })
 
     return elements
@@ -386,6 +415,10 @@ def export_entity(obj, depsgraph):
         "subtype": props.prop_subtype,
         "elevtype": props.prop_elevtype,
         "marker": props.prop_marker,
+        "interp": props.prop_path_interpolation,
+        "interp_len": props.prop_path_interpolation_length,
+        "interp_tension": props.prop_path_interpolation_tension,
+        "interp_order": props.prop_path_interpolation_order,
         "arguments": [
             getattr(obj.arguments, f"value_{i}") & 0xFFFFFFFF
             for i in range(props.prop_arg_count)

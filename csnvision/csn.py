@@ -76,6 +76,40 @@ class EntityProps(PropertyGroup):
         default=False
     )
 
+    prop_path_interpolation: EnumProperty(
+        name="",
+        description="Path interpolation mode",
+        items=[
+            ("none", "None", ""),
+            ("linear", "Linear", ""),
+            ("quadratic", "Quadratic", ""),
+            ("inverse_linear", "Inverse Linear", ""),
+            ("inverse_quadratic", "Inverse Quadratic", ""),
+        ],
+        default="none"
+    )
+    prop_path_interpolation_length: IntProperty(
+        name="",
+        description="Path interpolation length",
+        default=3,
+        min=3,
+        max=1024
+    )
+    prop_path_interpolation_tension: FloatProperty(
+        name="",
+        description="Path interpolation tension",
+        default=2,
+        min=0.01,
+        max=100
+    )
+    prop_path_interpolation_order: FloatProperty(
+        name="",
+        description="Path interpolation order",
+        default=1,
+        min=1,
+        max=16
+    )
+
     # Z-Index
     prop_zindex_enabled: BoolProperty(
         name="Z-Index",
@@ -349,6 +383,20 @@ for i in range(MAX_CAMERAS):
         description="Enable glow for FX2",
         default=False
     )
+
+    # Bonus
+    CameraElements.__annotations__[f"bonus_{i}"] = BoolProperty(
+        name="Bonus",
+        description="Mark this camera as a bonus area",
+        default=False
+    )
+
+    # Consider 2D
+    CameraElements.__annotations__[f"consider_2D_{i}"] = BoolProperty(
+        name="Consider 2D",
+        description="Consider this camera's zone 2D (needed for some props)",
+        default=False
+    )
     # Dark setting
     CameraElements.__annotations__[f"dark_{i}"] = EnumProperty(
         name="",
@@ -401,7 +449,7 @@ for i in range(MAX_CAMERAS):
     # Music
     CameraElements.__annotations__[f"music_enabled_{i}"] = BoolProperty(
         name="Music",
-        description="Enable music track",
+        description="Enable music track for camera's zone",
         default=False
     )
     CameraElements.__annotations__[f"music_target_{i}"] = StringProperty(
@@ -409,6 +457,41 @@ for i in range(MAX_CAMERAS):
         description="Music track id (max 5 chars)",
         default="",
         maxlen=5
+    )
+
+    # Stars
+    CameraElements.__annotations__[f"stars_enabled_{i}"] = BoolProperty(
+        name="Stars",
+        description="Enable star effect export",
+        default=False
+    )
+    CameraElements.__annotations__[f"stars_amount_{i}"] = IntProperty(
+        name = "",
+        description="Amount",
+        default=0x1E8,
+        min=0,
+        max=65535
+    )
+    CameraElements.__annotations__[f"stars_offset_{i}"] = IntProperty(
+        name = "",
+        description="Offset",
+        default=0x7D0,
+        min=-32768,
+        max=32767
+    )
+    CameraElements.__annotations__[f"stars_zindex_{i}"] = IntProperty(
+        name = "",
+        description="Z-Index",
+        default=0x380,
+        min=-32768,
+        max=32767
+    )
+    CameraElements.__annotations__[f"stars_distribution_{i}"] = IntProperty(
+        name = "",
+        description="Distribution",
+        default=2,
+        min=0,
+        max=65535
     )
     
     # Distance
@@ -461,11 +544,23 @@ for i in range(MAX_CAMERAS):
         description="Transition type",
         items=[
             ("-", "-", ""),
-            ("split", "Split", ""),
-            ("collision", "Collision", ""),
-            ("elevator", "Elevator", ""),
+            ("coll_split", "coll_split", ""),
+            ("coll_switch", "coll_switch", ""),
+            ("coll_trans", "coll_trans", ""),
+            ("elev_switch", "elev_switch", ""),
+            ("elev_trans", "elev_trans", ""),
+            ("magic_left", "magic_left", ""),
+            ("magic_right", "magic_right", ""),
+            ("magic_fwd", "magic_fwd", ""),
+            ("magic_bwd", "magic_bwd", ""),
+            ("magic_up", "magic_up", "")
         ],
         default="-"
+    )
+    CameraElements.__annotations__[f"transition_smooth_{i}"] = BoolProperty(
+        name="Smooth",
+        description="Enable smooth transition",
+        default=False
     )
     
     # Warp in target
@@ -514,6 +609,48 @@ for i in range(MAX_CAMERAS):
         set=make_camera_hex_setter(i, "follow_strength")
     )
 
+    # Particles
+    CameraElements.__annotations__[f"particles_enabled_{i}"] = BoolProperty(
+        name="Particles",
+        description="Enable particle effect export",
+        default=False
+    )
+    CameraElements.__annotations__[f"particles_amount_{i}"] = IntProperty(
+        name="",
+        description="Amount",
+        default=128,
+        min=-32768,
+        max=32767
+    )
+    CameraElements.__annotations__[f"particles_yoffset_{i}"] = IntProperty(
+        name="",
+        description="Y Offset",
+        default=0,
+        min=-32768,
+        max=32767
+    )
+    CameraElements.__annotations__[f"particles_velx_{i}"] = IntProperty(
+        name="",
+        description="Vel X",
+        default=0,
+        min=-32768,
+        max=32767
+    )
+    CameraElements.__annotations__[f"particles_vely_{i}"] = IntProperty(
+        name="",
+        description="Vel Y",
+        default=50,
+        min=-32768,
+        max=32767
+    )
+    CameraElements.__annotations__[f"particles_velz_{i}"] = IntProperty(
+        name="",
+        description="Vel Z",
+        default=0,
+        min=-32768,
+        max=32767
+    )
+
 # Panels
 
 class CXF_PT_prop(Panel):
@@ -548,6 +685,16 @@ class CXF_PT_prop(Panel):
         
         # marker
         layout.prop(props, "prop_marker")        
+
+        # path interpolation
+        row = layout.row(align=True)
+        row.label(text="Path Interpolation:")
+        row.prop(props, "prop_path_interpolation")
+
+        row = layout.row(align=True)
+        row.prop(props, "prop_path_interpolation_length")
+        row.prop(props, "prop_path_interpolation_tension")
+        row.prop(props, "prop_path_interpolation_order")
 
         # elevator type
         row = layout.row(align=True)
@@ -654,7 +801,7 @@ class CXF_PT_camera(Panel):
         box = layout.box()
         col = box.column()        
         try:
-            camname = obj.name.split(',')[i]
+            camname = obj.name.split(',')[i].replace(" ", "")
         except:
             camname = f'No {i}-th ID!!'
             
@@ -711,14 +858,14 @@ class CXF_PT_camera(Panel):
         row.label(text="Transition:")                   
         row.prop(obj.camera_elements, f"transition_type_{i}")            
         
-        sub = col.row(align=True)
-        sub.enabled = getattr(obj.camera_elements, f"transition_type_{i}") != "-"
-        sub.label(text="Target cam:")
-        sub.prop(obj.camera_elements, f"transition_target_cam_{i}")            
+        row = col.row(align=True)
+        row.enabled = getattr(obj.camera_elements, f"transition_type_{i}") != "-"
+        row.prop(obj.camera_elements, f"transition_smooth_{i}")
+        row.prop(obj.camera_elements, f"transition_target_cam_{i}")
         
         col.separator()
         
-        # Warp in target
+        # Warp in target    
         row = col.row(align=True)
         row.label(text="Prop 198 type:")
         row.prop(obj.camera_elements, f"warp_in_target_type_{i}")
@@ -765,6 +912,11 @@ class CXF_PT_camera(Panel):
         row = col.row(align=True)
         row.prop(obj.camera_elements, f"fade_fx_enabled_{i}")
         row.prop(obj.camera_elements, f"glow_fx2_enabled_{i}")
+
+        # Bonus / Consider 2D
+        row = col.row(align=True)
+        row.prop(obj.camera_elements, f"bonus_{i}")
+        row.prop(obj.camera_elements, f"consider_2D_{i}")
         
         # dark
         row = col.row(align=True)
@@ -785,6 +937,30 @@ class CXF_PT_camera(Panel):
         sub.prop(obj.camera_elements, f"amount_hex_{i}")
         sub.prop(obj.camera_elements, f"max_follow_dist_hex_{i}")
         sub.prop(obj.camera_elements, f"follow_strength_hex_{i}")
+
+        # Particles
+        row = col.row(align=True)
+        row.prop(obj.camera_elements, f"particles_enabled_{i}")
+        row.prop(obj.camera_elements, f"particles_amount_{i}")
+        row.prop(obj.camera_elements, f"particles_yoffset_{i}")
+
+        row = col.row(align=True)
+        row.prop(obj.camera_elements, f"particles_velx_{i}")
+        row.prop(obj.camera_elements, f"particles_vely_{i}")
+        row.prop(obj.camera_elements, f"particles_velz_{i}")
+                
+        # Stars
+        row = col.row(align=True)
+        row.prop(obj.camera_elements, f"stars_enabled_{i}")
+        sub = row.row(align=True)
+        sub.enabled = getattr(obj.camera_elements, f"stars_enabled_{i}")
+        sub.prop(obj.camera_elements, f"stars_amount_{i}")
+        sub.prop(obj.camera_elements, f"stars_offset_{i}")
+
+        row = col.row(align=True)
+        row.enabled = getattr(obj.camera_elements, f"stars_enabled_{i}")
+        row.prop(obj.camera_elements, f"stars_zindex_{i}")
+        row.prop(obj.camera_elements, f"stars_distribution_{i}")
             
 
 class CXF_PT_zone_properties(Panel):
@@ -935,6 +1111,10 @@ class CXF_OT_copy_props(Operator):
             "subtype": props.prop_subtype,
             "elevtype": props.prop_elevtype,
             "marker": props.prop_marker,
+            "path_interpolation": props.prop_path_interpolation,
+            "path_interpolation_length": props.prop_path_interpolation_length,
+            "path_interpolation_tension": props.prop_path_interpolation_tension,
+            "path_interpolation_order": props.prop_path_interpolation_order,
             "victims": [
                 getattr(context.object.victims, f"victim_{i}")
                 for i in range(props.prop_victim_count)
@@ -976,6 +1156,10 @@ class CXF_OT_paste_props(Operator):
                 props.prop_subtype = data.get("subtype", 0)
                 props.prop_elevtype = data.get("elevtype", "-")
                 props.prop_marker = data.get("marker", False)
+                props.prop_path_interpolation = data.get("path_interpolation", "none")
+                props.prop_path_interpolation_length = data.get("path_interpolation_length", 3)
+                props.prop_path_interpolation_tension = data.get("path_interpolation_tension", 0.01)
+                props.prop_path_interpolation_order = data.get("path_interpolation_order", 1)
 
                 victims = data.get("victims", [])
                 props.prop_victim_count = min(len(victims), MAX_VICTIMS)
@@ -1043,6 +1227,8 @@ class CXF_OT_copy_cam_props(Operator):
                 "fxcontrol2":            getattr(cam, f"fxcontrol2_value_{i}") & 0xFFFFFFFF,
                 "fade_fx_enabled":       getattr(cam, f"fade_fx_enabled_{i}"),
                 "glow_fx2_enabled":      getattr(cam, f"glow_fx2_enabled_{i}"),
+                "bonus":                 getattr(cam, f"bonus_{i}"),
+                "consider_2D":           getattr(cam, f"consider_2D_{i}"),
                 "dark":                  getattr(cam, f"dark_{i}"),
                 "cold":                  getattr(cam, f"cold_{i}"),
                 "interpolate":           getattr(cam, f"interpolate_{i}"),
@@ -1054,6 +1240,12 @@ class CXF_OT_copy_cam_props(Operator):
                 "amount":                getattr(cam, f"amount_value_{i}") & 0xFFFFFFFF,
                 "max_follow_dist":       getattr(cam, f"max_follow_dist_value_{i}") & 0xFFFFFFFF,
                 "follow_strength":       getattr(cam, f"follow_strength_value_{i}") & 0xFFFFFFFF,
+                "particles_enabled":     getattr(cam, f"particles_enabled_{i}"),
+                "particles_amount":      getattr(cam, f"particles_amount_{i}") & 0xFFFFFFFF,
+                "particles_yoffset":     getattr(cam, f"particles_yoffset_{i}") & 0xFFFFFFFF,
+                "particles_velx":        getattr(cam, f"particles_velx_{i}") & 0xFFFFFFFF,
+                "particles_vely":        getattr(cam, f"particles_vely_{i}") & 0xFFFFFFFF,
+                "particles_velz":        getattr(cam, f"particles_velz_{i}") & 0xFFFFFFFF,
             }
         }
 
@@ -1063,7 +1255,7 @@ class CXF_OT_copy_cam_props(Operator):
 
 
 class CXF_OT_paste_cam_props(Operator):
-    """Paste camera properties to the currently selected instance on all selected objects"""
+    """Paste camera properties to the all property instances on all selected objects"""
     bl_idname = "object.paste_cam_props"
     bl_label = "Paste Camera Instance"
 
@@ -1089,45 +1281,54 @@ class CXF_OT_paste_cam_props(Operator):
             return v - 0x100000000 if v >= 0x80000000 else v
 
         for target_obj in context.selected_objects:
-            i = target_obj.entity_props.cam_selected - 1
-            cam = target_obj.camera_elements
+            cam_count = target_obj.entity_props.cam_count
+            for i in range(cam_count):
+                cam = target_obj.camera_elements
 
-            try:
-                setattr(cam, f"mode_{i}",                  cp.get("mode", "AUTO"))
-                setattr(cam, f"Panning_enabled_{i}",       cp.get("panning_enabled", False))
-                setattr(cam, f"Panningx_value_{i}",        uint32_to_int32(cp.get("panningx", 0x40)))
-                setattr(cam, f"Panningy_value_{i}",        uint32_to_int32(cp.get("panningy", 0x40)))
-                setattr(cam, f"distance_enabled_{i}",      cp.get("distance_enabled", False))
-                setattr(cam, f"distance_value_{i}",        uint32_to_int32(cp.get("distance", 0x600)))
-                setattr(cam, f"spacing_enabled_{i}",       cp.get("spacing_enabled", False))
-                setattr(cam, f"spacing_{i}",               cp.get("spacing", 200))
-                setattr(cam, f"fog_distance_enabled_{i}",  cp.get("fog_distance_enabled", False))
-                setattr(cam, f"fog_distance_value_{i}",    uint32_to_int32(cp.get("fog_distance", 0)))
-                setattr(cam, f"water_enabled_{i}",         cp.get("water_enabled", False))
-                setattr(cam, f"water_target_{i}",          cp.get("water_target", ""))
-                setattr(cam, f"mirror_enabled_{i}",        cp.get("mirror_enabled", False))
-                setattr(cam, f"mirror_target_{i}",         cp.get("mirror_target", ""))
-                setattr(cam, f"music_enabled_{i}",         cp.get("music_enabled", False))
-                setattr(cam, f"music_target_{i}",          cp.get("music_target", ""))
-                setattr(cam, f"wavy_enabled_{i}",          cp.get("wavy_enabled", False))
-                setattr(cam, f"fxcontrol1_value_{i}",      uint32_to_int32(cp.get("fxcontrol1", 0)))
-                setattr(cam, f"fxcontrol2_value_{i}",      uint32_to_int32(cp.get("fxcontrol2", 0x14)))
-                setattr(cam, f"fade_fx_enabled_{i}",       cp.get("fade_fx_enabled", False))
-                setattr(cam, f"glow_fx2_enabled_{i}",      cp.get("glow_fx2_enabled", False))
-                setattr(cam, f"dark_{i}",                  cp.get("dark", "AUTO"))
-                setattr(cam, f"cold_{i}",                  cp.get("cold", "AUTO"))
-                setattr(cam, f"interpolate_{i}",           cp.get("interpolate", "AUTO"))
-                setattr(cam, f"transition_type_{i}",       cp.get("transition_type", "-"))
-                setattr(cam, f"transition_target_cam_{i}", cp.get("transition_target_cam", ""))
-                setattr(cam, f"warp_in_target_type_{i}",   cp.get("warp_in_target_type", "-"))
-                setattr(cam, f"warp_in_target_{i}",        cp.get("warp_in_target", ""))
-                setattr(cam, f"freemove_enabled_{i}",      cp.get("freemove_enabled", False))
-                setattr(cam, f"amount_value_{i}",          uint32_to_int32(cp.get("amount", 0)))
-                setattr(cam, f"max_follow_dist_value_{i}", uint32_to_int32(cp.get("max_follow_dist", 0)))
-                setattr(cam, f"follow_strength_value_{i}", uint32_to_int32(cp.get("follow_strength", 0)))
-            except Exception as e:
-                self.report({'ERROR'}, str(e))
-                return {'CANCELLED'}
+                try:
+                    setattr(cam, f"mode_{i}",                  cp.get("mode", "AUTO"))
+                    setattr(cam, f"Panning_enabled_{i}",       cp.get("panning_enabled", False))
+                    setattr(cam, f"Panningx_value_{i}",        uint32_to_int32(cp.get("panningx", 0x40)))
+                    setattr(cam, f"Panningy_value_{i}",        uint32_to_int32(cp.get("panningy", 0x40)))
+                    setattr(cam, f"distance_enabled_{i}",      cp.get("distance_enabled", False))
+                    setattr(cam, f"distance_value_{i}",        uint32_to_int32(cp.get("distance", 0x600)))
+                    setattr(cam, f"spacing_enabled_{i}",       cp.get("spacing_enabled", False))
+                    setattr(cam, f"spacing_{i}",               cp.get("spacing", 200))
+                    setattr(cam, f"fog_distance_enabled_{i}",  cp.get("fog_distance_enabled", False))
+                    setattr(cam, f"fog_distance_value_{i}",    uint32_to_int32(cp.get("fog_distance", 0)))
+                    setattr(cam, f"water_enabled_{i}",         cp.get("water_enabled", False))
+                    setattr(cam, f"water_target_{i}",          cp.get("water_target", ""))
+                    setattr(cam, f"mirror_enabled_{i}",        cp.get("mirror_enabled", False))
+                    setattr(cam, f"mirror_target_{i}",         cp.get("mirror_target", ""))
+                    setattr(cam, f"music_enabled_{i}",         cp.get("music_enabled", False))
+                    setattr(cam, f"music_target_{i}",          cp.get("music_target", ""))
+                    setattr(cam, f"wavy_enabled_{i}",          cp.get("wavy_enabled", False))
+                    setattr(cam, f"fxcontrol1_value_{i}",      uint32_to_int32(cp.get("fxcontrol1", 0)))
+                    setattr(cam, f"fxcontrol2_value_{i}",      uint32_to_int32(cp.get("fxcontrol2", 0x14)))
+                    setattr(cam, f"fade_fx_enabled_{i}",       cp.get("fade_fx_enabled", False))
+                    setattr(cam, f"glow_fx2_enabled_{i}",      cp.get("glow_fx2_enabled", False))
+                    setattr(cam, f"bonus_{i}",                 cp.get("bonus", False))
+                    setattr(cam, f"consider_2D_{i}",           cp.get("consider_2D", False))
+                    setattr(cam, f"dark_{i}",                  cp.get("dark", "AUTO"))
+                    setattr(cam, f"cold_{i}",                  cp.get("cold", "AUTO"))
+                    setattr(cam, f"interpolate_{i}",           cp.get("interpolate", "AUTO"))
+                    setattr(cam, f"transition_type_{i}",       cp.get("transition_type", "-"))
+                    setattr(cam, f"transition_target_cam_{i}", cp.get("transition_target_cam", ""))
+                    setattr(cam, f"warp_in_target_type_{i}",   cp.get("warp_in_target_type", "-"))
+                    setattr(cam, f"warp_in_target_{i}",        cp.get("warp_in_target", ""))
+                    setattr(cam, f"freemove_enabled_{i}",      cp.get("freemove_enabled", False))
+                    setattr(cam, f"amount_value_{i}",          uint32_to_int32(cp.get("amount", 0)))
+                    setattr(cam, f"max_follow_dist_value_{i}", uint32_to_int32(cp.get("max_follow_dist", 0)))
+                    setattr(cam, f"follow_strength_value_{i}", uint32_to_int32(cp.get("follow_strength", 0)))
+                    setattr(cam, f"particles_enabled_{i}",     cp.get("particles_enabled", False))
+                    setattr(cam, f"particles_amount_{i}",      uint32_to_int32(cp.get("particles_amount", 0)))
+                    setattr(cam, f"particles_yoffset_{i}",     uint32_to_int32(cp.get("particles_yoffset", 0)))
+                    setattr(cam, f"particles_velx_{i}",        uint32_to_int32(cp.get("particles_velx", 0)))
+                    setattr(cam, f"particles_vely_{i}",        uint32_to_int32(cp.get("particles_vely", 0)))
+                    setattr(cam, f"particles_velz_{i}",        uint32_to_int32(cp.get("particles_velz", 0)))
+                except Exception as e:
+                    self.report({'ERROR'}, str(e))
+                    return {'CANCELLED'}
 
         self.report({'INFO'}, "Camera instance pasted")
         return {'FINISHED'}
