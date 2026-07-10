@@ -544,16 +544,12 @@ for i in range(MAX_CAMERAS):
         description="Transition type",
         items=[
             ("-", "-", ""),
-            ("coll_split", "coll_split", ""),
-            ("coll_switch", "coll_switch", ""),
+            ("coll_switch_1E9", "coll_switch_1E9", ""),
+            ("coll_switch_229", "coll_switch_229", ""),
+            ("coll_split", "coll_split", ""),            
             ("coll_trans", "coll_trans", ""),
             ("elev_switch", "elev_switch", ""),
             ("elev_trans", "elev_trans", ""),
-            ("magic_left", "magic_left", ""),
-            ("magic_right", "magic_right", ""),
-            ("magic_fwd", "magic_fwd", ""),
-            ("magic_bwd", "magic_bwd", ""),
-            ("magic_up", "magic_up", "")
         ],
         default="-"
     )
