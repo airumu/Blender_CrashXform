@@ -204,6 +204,8 @@ def export_mesh(obj, depsgraph, exp_type):
 
     if is_world(obj) and hasattr(obj, 'world_props') and obj.world_props.skybox:
         result["skybox"] = True
+    if is_collision(obj) and hasattr(obj, "world_props") and obj.world_props.fill:
+        result["fill"] = True
 
     return result
 

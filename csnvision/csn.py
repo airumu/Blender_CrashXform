@@ -269,6 +269,12 @@ class WorldProps(PropertyGroup):
         description="Mark this world mesh as a skybox",
         default=False
     )
+    
+    fill: BoolProperty(
+        name="Fill",
+        description="Fill this collision shape",
+        default = False
+    )
 
 # Generation
 
@@ -1042,11 +1048,20 @@ class CXF_PT_world_properties(Panel):
             layout.label(text="No object selected")
             return
 
+        is_world = export_scenery.is_world(obj)
+        is_coll = export_scenery.is_collision(obj)
+
         # only show for world meshes
-        if not hasattr(obj, 'world_props') or not export_scenery.is_world(obj):
+        if not hasattr(obj, 'world_props') or (not is_world and not is_coll):
             return
 
-        layout.prop(obj.world_props, "skybox")
+        row = layout.row()
+        row.enabled = is_world
+        row.prop(obj.world_props, "skybox")
+        
+        row = layout.row()
+        row.enabled = is_coll
+        row.prop(obj.world_props, "fill")        
 
 # Execute
 
