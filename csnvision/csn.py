@@ -6,6 +6,7 @@ from bpy.types import (
     Menu,
     Panel,
     PropertyGroup,
+    UIList,
     AddonPreferences)
 from bpy.props import (
     FloatProperty,
@@ -25,10 +26,60 @@ MAX_VICTIMS = 8
 MAX_CAMERAS = 5
 MAX_NEIGHBOURS = 8
 
+def make_prop_hex_getter(field, mask=0xFFFFFFFF):
+    def getter(self):
+        value = getattr(self, field) & mask
+        return hex(value)
+    return getter
+
+def make_prop_hex_setter(field, sign_bit=0x80000000, wrap=0x100000000):
+    def setter(self, text):
+        try:
+            value = int(text, 16)
+            if value >= sign_bit:
+                value -= wrap
+            setattr(self, field, value)
+        except ValueError:
+            pass
+    return setter
+
+
+class ArbitraryProp(PropertyGroup):
+    code: IntProperty(
+        name="Code",
+        description="Arbitrary property code",
+        default=0,
+        min=-32768,
+        max=32767
+    )
+    code_hex: StringProperty(
+        name="Code",
+        description="Arbitrary property code (hex)",
+        get=make_prop_hex_getter("code", mask=0xFFFF),
+        set=make_prop_hex_setter("code", sign_bit=0x8000, wrap=0x10000)
+    )
+    name: StringProperty(
+        name="Name",
+        description="Arbitrary property name",
+        default=""
+    )
+    value: IntProperty(
+        name="Value",
+        description="Arbitrary property value",
+        default=0
+    )
+    value_hex: StringProperty(
+        name="Value",
+        description="Arbitrary property value (hex)",
+        get=make_prop_hex_getter("value"),
+        set=make_prop_hex_setter("value")
+    )
+
+
 class EntityProps(PropertyGroup):
     set_zone: StringProperty(
         name="Zone",
-        description="Override zone name.",
+        description="Specify explicit zone name.",
         default=""
     )
 
@@ -36,7 +87,7 @@ class EntityProps(PropertyGroup):
 
     prop_id_enabled: BoolProperty(
         name="ID",
-        description="Override entity ID.",
+        description="Specify explicit entity ID.",
         default=False
     )
     prop_id: IntProperty(
@@ -151,23 +202,15 @@ class EntityProps(PropertyGroup):
         default=100
     )
 
-    # Victims
-    prop_victim_count: IntProperty(
-        name="Victims:",
-        description="Set the number of victims.",
-        default=0,
-        min=0,
-        max=MAX_VICTIMS,
-        options={'SKIP_SAVE'}
+    # Arbitrary properties
+    arbitrary_props: CollectionProperty(
+        type=ArbitraryProp,
+        name="Arbitrary Properties",
+        description="Arbitrary code/name/value properties"
     )
-
-    prop_arg_count: IntProperty(
-        name="Arguments:",
-        description="Set the number of arguments.",
-        default=0,
-        min=0,
-        max=MAX_ARGS,
-        options={'SKIP_SAVE'}
+    arbitrary_props_index: IntProperty(
+        name="Arbitrary Property Index",
+        default=0
     )
 
     # camera properties
@@ -198,33 +241,6 @@ class EntityProps(PropertyGroup):
         options={'SKIP_SAVE'}
     )
 
-def make_hex_getter(index):
-    def getter(self):
-        value = getattr(self, f"value_{index}")
-
-        # int32 -> uint32
-        value &= 0xFFFFFFFF
-
-        return hex(value)
-
-    return getter
-
-def make_hex_setter(index):
-    def setter(self, text):
-        try:
-            value = int(text, 16)
-
-            # uint32 -> int32
-            if value >= 0x80000000:
-                value -= 0x100000000
-
-            setattr(self, f"value_{index}", value)
-
-        except ValueError:
-            pass
-
-    return setter
-
 def make_camera_hex_getter(index, prop_name):
     def getter(self):
         value = getattr(self, f"{prop_name}_value_{index}")
@@ -243,24 +259,101 @@ def make_camera_hex_setter(index, prop_name):
             pass
     return setter
 
+class ArgumentEntry(PropertyGroup):
+    value: IntProperty(
+        name="Value",
+        description="Argument value",
+        default=0
+    )
+    value_hex: StringProperty(
+        name="Value",
+        description="Argument value (hex)",
+        get=make_prop_hex_getter("value"),
+        set=make_prop_hex_setter("value")
+    )
+
+
+class VictimEntry(PropertyGroup):
+    name: StringProperty(
+        name="Victim",
+        description="Victim name",
+        default=""
+    )
+
+
 class Arguments(PropertyGroup):
-    pass
+    entries: CollectionProperty(
+        type=ArgumentEntry,
+        name="Arguments",
+        description="Entity argument values"
+    )
+    active_index: IntProperty(
+        name="Argument Index",
+        default=0
+    )
+
 
 class Victims(PropertyGroup):
-    pass
+    entries: CollectionProperty(
+        type=VictimEntry,
+        name="Victims",
+        description="Victim names"
+    )
+    active_index: IntProperty(
+        name="Victim Index",
+        default=0
+    )
+
+class NeighbourEntry(PropertyGroup):
+    name: StringProperty(
+        name="Neighbour",
+        description="Explicit neighbour zone name",
+        default=""
+    )
+
 
 class ZoneProps(PropertyGroup):
-    explicit_neighbour_count: IntProperty(
-        name="Explicit Neighbours:",
-        description="Set the number of explicit neighbours.",
-        default=0,
-        min=0,
-        max=MAX_NEIGHBOURS,
-        options={'SKIP_SAVE'}
+    entries: CollectionProperty(
+        type=NeighbourEntry,
+        name="Explicit Neighbours",
+        description="Explicit neighbour zone names"
+    )
+    active_index: IntProperty(
+        name="Neighbour Index",
+        default=0
     )
 
 class CameraElements(PropertyGroup):
     pass
+
+
+class PanelToggles(PropertyGroup):
+    """Collapse/expand state for the Object Properties panel sections.
+
+    Lives on the WindowManager rather than on entity_props/zone_props so the
+    collapsed/expanded state is shared across every object (and isn't saved
+    with the file - it's pure UI state).
+    """
+    arguments_expanded: BoolProperty(
+        name="Arguments Expanded",
+        default=False,
+        options={'SKIP_SAVE'}
+    )
+    victims_expanded: BoolProperty(
+        name="Victims Expanded",
+        default=False,
+        options={'SKIP_SAVE'}
+    )
+    arbitrary_props_expanded: BoolProperty(
+        name="Arbitrary Properties Expanded",
+        default=False,
+        options={'SKIP_SAVE'}
+    )
+    neighbours_expanded: BoolProperty(
+        name="Explicit Neighbours Expanded",
+        default=False,
+        options={'SKIP_SAVE'}
+    )
 
 
 class WorldProps(PropertyGroup):
@@ -277,30 +370,6 @@ class WorldProps(PropertyGroup):
     )
 
 # Generation
-
-for i in range(MAX_ARGS):
-    Arguments.__annotations__[f"value_{i}"] = IntProperty(
-        default=0
-    )
-    Arguments.__annotations__[f"hex_{i}"] = StringProperty(
-        name=f"Arg {i + 1}",
-        get=make_hex_getter(i),
-        set=make_hex_setter(i)
-    )
-
-for i in range(MAX_VICTIMS):
-    Victims.__annotations__[f"victim_{i}"] = StringProperty(
-        name=f"Victim {i + 1}",
-        description=f"Victim name {i + 1}",
-        default=""
-    )
-
-for i in range(MAX_NEIGHBOURS):
-    ZoneProps.__annotations__[f"explicit_neighbour_{i}"] = StringProperty(
-        name=f"Neighbour {i + 1}",
-        description=f"Explicit neighbour zone name {i + 1}",
-        default=""
-    )
 
 # Camera elements generation
 for i in range(MAX_CAMERAS):
@@ -321,7 +390,7 @@ for i in range(MAX_CAMERAS):
     # Panning
     CameraElements.__annotations__[f"Panning_enabled_{i}"] = BoolProperty(
         name="Panning",
-        description="Enable camera panning override",
+        description="Specify override camera panning",
         default=False
     )
     CameraElements.__annotations__[f"Panningx_value_{i}"] = IntProperty(
@@ -428,7 +497,7 @@ for i in range(MAX_CAMERAS):
     # Fog distance
     CameraElements.__annotations__[f"fog_distance_enabled_{i}"] = BoolProperty(
         name="Fog Distance",
-        description="Enable fog distance override",
+        description="Specify fog distance",
         default=False
     )
     CameraElements.__annotations__[f"fog_distance_value_{i}"] = IntProperty(
@@ -531,7 +600,7 @@ for i in range(MAX_CAMERAS):
     # Interpolate
     CameraElements.__annotations__[f"interpolate_{i}"] = EnumProperty(
         name="",
-        description="Override default interpolation setting",
+        description="Specify explicit interpolation setting",
         items=[
             ("AUTO", "Auto", ""),
             ("INTERPOLATE", "Interpolate", ""),
@@ -655,6 +724,35 @@ for i in range(MAX_CAMERAS):
 
 # Panels
 
+class CXF_UL_arbitrary_props(UIList):
+    def draw_item(self, context, layout, data, item, icon, active_data, active_propname, index):
+        row = layout.row(align=True)
+        row.prop(item, "name", text="")
+        row.prop(item, "code_hex", text="")        
+        row.prop(item, "value_hex", text="")
+
+
+class CXF_UL_victims(UIList):
+    def draw_item(self, context, layout, data, item, icon, active_data, active_propname, index):
+        row = layout.row(align=True)
+        row.label(text="", icon='USER')
+        row.prop(item, "name", text="", emboss=False)
+
+
+class CXF_UL_arguments(UIList):
+    def draw_item(self, context, layout, data, item, icon, active_data, active_propname, index):
+        row = layout.row(align=True)
+        row.label(text=f"{index}", icon='BLANK1')
+        row.prop(item, "value_hex", text="", emboss=False)
+
+
+class CXF_UL_neighbours(UIList):
+    def draw_item(self, context, layout, data, item, icon, active_data, active_propname, index):
+        row = layout.row(align=True)
+        row.label(text="", icon='MESH_GRID')
+        row.prop(item, "name", text="", emboss=False)
+
+
 class CXF_PT_prop(Panel):
     bl_label = "Entity Properties"
     bl_space_type = "VIEW_3D"
@@ -674,9 +772,11 @@ class CXF_PT_prop(Panel):
 
         props = obj.entity_props
 
+        # marker
+        layout.prop(props, "prop_marker")     
+        
         # zone
         layout.prop(props, "set_zone")
-        layout.separator()
 
         # id
         row = layout.row(align=True)
@@ -684,9 +784,11 @@ class CXF_PT_prop(Panel):
         col = row.column()
         col.enabled = props.prop_id_enabled
         col.prop(props, "prop_id")
-        
-        # marker
-        layout.prop(props, "prop_marker")        
+                
+        # type/subtype
+        row = layout.row(align=True)
+        row.prop(props, "prop_type")
+        row.prop(props, "prop_subtype")
 
         # path interpolation
         row = layout.row(align=True)
@@ -694,6 +796,7 @@ class CXF_PT_prop(Panel):
         row.prop(props, "prop_path_interpolation")
 
         row = layout.row(align=True)
+        row.enabled = props.prop_path_interpolation != "none"
         row.prop(props, "prop_path_interpolation_length")
         row.prop(props, "prop_path_interpolation_tension")
         row.prop(props, "prop_path_interpolation_order")
@@ -702,11 +805,6 @@ class CXF_PT_prop(Panel):
         row = layout.row(align=True)
         row.label(text="Elevator type:")
         row.prop(props, "prop_elevtype")
-        layout.separator()
-        
-        # type/subtype
-        layout.prop(props, "prop_type")
-        layout.prop(props, "prop_subtype")        
 
         # Z-Index
         row = layout.row(align=True)
@@ -724,38 +822,78 @@ class CXF_PT_prop(Panel):
         sub.prop(props, "prop_dda_section")
         sub.prop(props, "prop_dda_count")
 
-        layout.separator()
+        toggles = context.window_manager.csn_panel_toggles
 
-        # C2E override
-        row = layout.row(align=True)
-        row.label(text="C2E Pos Target:")
-        row.prop(props, "prop_c2e_override_pos_target")
-
-        row = layout.row(align=True)
-        row.label(text="C2E Mult:")
-        sub = row.column()
-        sub.prop(props, "prop_c2e_override_mult")
+        # Arguments
+        box = layout.box()
+        header = box.row()
+        header.prop(
+            toggles, "arguments_expanded",
+            icon='TRIA_DOWN' if toggles.arguments_expanded else 'TRIA_RIGHT',
+            icon_only=True, emboss=False
+        )
+        header.label(text=f"Arguments ({len(obj.arguments.entries)})")
+        if toggles.arguments_expanded:
+            row = box.row()
+            row.template_list(
+                "CXF_UL_arguments", "",
+                obj.arguments, "entries",
+                obj.arguments, "active_index",
+                rows=3
+            )
+            col = row.column(align=True)
+            col.operator(CXF_OT_argument_add.bl_idname, icon='ADD', text="")
+            col.operator(CXF_OT_argument_remove.bl_idname, icon='REMOVE', text="")
 
         # Victims
-        layout.use_property_split = True
-        layout.prop(props, "prop_victim_count")
-        layout.use_property_split = False
-
         box = layout.box()
-        for i in range(props.prop_victim_count):
-            box.prop(obj.victims, f"victim_{i}")
+        header = box.row()
+        header.prop(
+            toggles, "victims_expanded",
+            icon='TRIA_DOWN' if toggles.victims_expanded else 'TRIA_RIGHT',
+            icon_only=True, emboss=False
+        )
+        header.label(text=f"Victims ({len(obj.victims.entries)})")
+        if toggles.victims_expanded:
+            row = box.row()
+            row.template_list(
+                "CXF_UL_victims", "",
+                obj.victims, "entries",
+                obj.victims, "active_index",
+                rows=3
+            )
+            col = row.column(align=True)
+            col.operator(CXF_OT_victim_add.bl_idname, icon='ADD', text="")
+            col.operator(CXF_OT_victim_remove.bl_idname, icon='REMOVE', text="")
 
-        # arg count
-        layout.use_property_split = True
-        layout.prop(props, "prop_arg_count")
-        layout.use_property_split = False
-
-        # args
+        # Arbitrary properties
         box = layout.box()
-        for i in range(props.prop_arg_count):
-            box.prop(obj.arguments, f"hex_{i}")
-        layout.separator()
-    
+        header = box.row()
+        header.prop(
+            toggles, "arbitrary_props_expanded",
+            icon='TRIA_DOWN' if toggles.arbitrary_props_expanded else 'TRIA_RIGHT',
+            icon_only=True, emboss=False
+        )
+        header.label(text=f"Arbitrary Properties ({len(props.arbitrary_props)})")
+        if toggles.arbitrary_props_expanded:
+            row = box.row()
+            row.template_list(
+                "CXF_UL_arbitrary_props", "",
+                props, "arbitrary_props",
+                props, "arbitrary_props_index",
+                rows=3
+            )
+            col = row.column(align=True)
+            col.operator(CXF_OT_arbitrary_prop_add.bl_idname, icon='ADD', text="")
+            col.operator(CXF_OT_arbitrary_prop_remove.bl_idname, icon='REMOVE', text="")
+
+        # C2E overrides
+        row = layout.row(align=True)
+        row.label(text="C2E OvrPos:")
+        row.prop(props, "prop_c2e_override_pos_target")        
+        row.label(text="C2E Mult:")
+        row.prop(props, "prop_c2e_override_mult")
+
         row = layout.row(align=True)
         row.operator(CXF_OT_copy_props.bl_idname, text="Copy Props")
         row.operator(CXF_OT_paste_props.bl_idname, text="Paste Props")
@@ -776,6 +914,8 @@ class CXF_PT_camera(Panel):
         obj = context.object
 
         if obj is None or not export_scenery.is_camera(obj):
+            return
+        if obj.type == 'CURVE':            
             return
 
         props = obj.entity_props
@@ -987,14 +1127,27 @@ class CXF_PT_zone_properties(Panel):
             return
 
         zone = obj.zone_props
-
-        layout.use_property_split = True
-        layout.prop(zone, "explicit_neighbour_count")
-        layout.use_property_split = False
+        toggles = context.window_manager.csn_panel_toggles
 
         box = layout.box()
-        for i in range(zone.explicit_neighbour_count):
-            box.prop(zone, f"explicit_neighbour_{i}")
+        header = box.row()
+        header.prop(
+            toggles, "neighbours_expanded",
+            icon='TRIA_DOWN' if toggles.neighbours_expanded else 'TRIA_RIGHT',
+            icon_only=True, emboss=False
+        )
+        header.label(text=f"Explicit Neighbours ({len(zone.entries)})")
+        if toggles.neighbours_expanded:
+            row = box.row()
+            row.template_list(
+                "CXF_UL_neighbours", "",
+                zone, "entries",
+                zone, "active_index",
+                rows=3
+            )
+            col = row.column(align=True)
+            col.operator(CXF_OT_neighbour_add.bl_idname, icon='ADD', text="")
+            col.operator(CXF_OT_neighbour_remove.bl_idname, icon='REMOVE', text="")
 
 
 class CXF_PT_tools(Panel):
@@ -1012,6 +1165,7 @@ class CXF_PT_tools(Panel):
         obj = context.object
 
         layout.operator(CXF_OT_reassing_ids.bl_idname, text="Reassign Entity IDs")
+        layout.operator(CXF_OT_migrate_legacy_props.bl_idname, text="Migrate Legacy Props")
 
 class CXF_PT_export_scenery(Panel):
     bl_label = "Export"
@@ -1064,6 +1218,141 @@ class CXF_PT_world_properties(Panel):
         row.prop(obj.world_props, "fill")        
 
 # Execute
+
+LEGACY_VICTIM_PREFIX = "victim_"
+LEGACY_ARGUMENT_PREFIX = "value_"
+LEGACY_NEIGHBOUR_PREFIX = "explicit_neighbour_"
+LEGACY_VICTIM_COUNT_KEY = "prop_victim_count"
+LEGACY_ARGUMENT_COUNT_KEY = "prop_arg_count"
+LEGACY_NEIGHBOUR_COUNT_KEY = "explicit_neighbour_count"
+
+def _legacy_indices(struct, prefix):
+    """Indices of present 'prefixN' orphaned custom properties on struct."""
+    return [
+        int(k[len(prefix):])
+        for k in struct.keys()
+        if k.startswith(prefix) and k[len(prefix):].isdigit()
+    ]
+
+def migrate_legacy_entity(obj):
+    """Migrate an object's pre-collection victim/argument/neighbour data
+    (stored as 'victim_0', 'victim_1', ..., 'value_0', 'value_1', ..., and
+    'explicit_neighbour_0', 'explicit_neighbour_1', ... orphaned custom
+    properties from before these used a proper CollectionProperty) into the
+    new victims.entries / arguments.entries / zone_props.entries collections.
+
+    A slot that was never explicitly edited by the user has no underlying
+    stored property at all (Blender only persists a value once it's set),
+    so the original item count (previously 'prop_victim_count' /
+    'prop_arg_count' / 'explicit_neighbour_count', also now orphaned) is
+    used to reconstruct the full original list - including untouched /
+    zero-valued slots - rather than only the indices that happen to have
+    stored data.
+
+    Safe to call repeatedly: does nothing once entries already exist, or if
+    no legacy data is present.
+    """
+    migrated = False
+    entity_props = obj.entity_props if hasattr(obj, "entity_props") else None
+
+    if hasattr(obj, "victims"):
+        victims = obj.victims
+        if len(victims.entries) == 0:
+            indices = _legacy_indices(victims, LEGACY_VICTIM_PREFIX)
+            legacy_count = None
+            if entity_props is not None and LEGACY_VICTIM_COUNT_KEY in entity_props.keys():
+                legacy_count = entity_props[LEGACY_VICTIM_COUNT_KEY]
+
+            if indices or legacy_count is not None:
+                count = max([legacy_count or 0] + [i + 1 for i in indices])
+                for i in range(count):
+                    key = f"{LEGACY_VICTIM_PREFIX}{i}"
+                    value = victims.get(key, "")
+                    if value:
+                        entry = victims.entries.add()
+                        entry.name = value
+
+                for i in indices:
+                    del victims[f"{LEGACY_VICTIM_PREFIX}{i}"]
+                if entity_props is not None and LEGACY_VICTIM_COUNT_KEY in entity_props.keys():
+                    del entity_props[LEGACY_VICTIM_COUNT_KEY]
+                migrated = True
+
+    if hasattr(obj, "arguments"):
+        arguments = obj.arguments
+        if len(arguments.entries) == 0:
+            indices = _legacy_indices(arguments, LEGACY_ARGUMENT_PREFIX)
+            legacy_count = None
+            if entity_props is not None and LEGACY_ARGUMENT_COUNT_KEY in entity_props.keys():
+                legacy_count = entity_props[LEGACY_ARGUMENT_COUNT_KEY]
+
+            if indices or legacy_count is not None:
+                count = max([legacy_count or 0] + [i + 1 for i in indices])
+                for i in range(count):
+                    key = f"{LEGACY_ARGUMENT_PREFIX}{i}"
+                    value = arguments.get(key, 0)
+                    entry = arguments.entries.add()
+                    entry.value = value
+
+                for i in indices:
+                    del arguments[f"{LEGACY_ARGUMENT_PREFIX}{i}"]
+                if entity_props is not None and LEGACY_ARGUMENT_COUNT_KEY in entity_props.keys():
+                    del entity_props[LEGACY_ARGUMENT_COUNT_KEY]
+                migrated = True
+
+    if hasattr(obj, "zone_props"):
+        zone = obj.zone_props
+        if LEGACY_NEIGHBOUR_COUNT_KEY in zone.keys():
+            legacy_count = zone[LEGACY_NEIGHBOUR_COUNT_KEY]
+            del zone[LEGACY_NEIGHBOUR_COUNT_KEY]
+            migrated = True
+        else:
+            legacy_count = None
+
+        if len(zone.entries) == 0:
+            indices = _legacy_indices(zone, LEGACY_NEIGHBOUR_PREFIX)
+            if indices or legacy_count is not None:
+                count = max([legacy_count or 0] + [i + 1 for i in indices])
+                for i in range(count):
+                    key = f"{LEGACY_NEIGHBOUR_PREFIX}{i}"
+                    value = zone.get(key, "")
+                    if value:
+                        entry = zone.entries.add()
+                        entry.name = value
+
+                for i in indices:
+                    del zone[f"{LEGACY_NEIGHBOUR_PREFIX}{i}"]
+                migrated = True
+
+    return migrated
+
+
+class CXF_OT_migrate_legacy_props(Operator):
+    """migrate old props"""
+    bl_idname = "object.migrate_legacy_props"
+    bl_label = "Migrate Legacy Victims/Arguments/Neighbours"
+
+    def execute(self, context):
+        migrated_objects = 0
+        failed_objects = 0
+        for obj in bpy.data.objects:
+            try:
+                if migrate_legacy_entity(obj):
+                    migrated_objects += 1
+            except Exception as e:
+                failed_objects += 1
+                print(f"[CSNvision] Legacy migration failed for '{obj.name}': {e}")
+
+        if migrated_objects:
+            self.report({'INFO'}, f"Migrated legacy data on {migrated_objects} object(s)")
+        else:
+            self.report({'INFO'}, "No legacy victim/argument data found")
+
+        if failed_objects:
+            self.report({'WARNING'}, f"{failed_objects} object(s) failed to migrate, see console")
+
+        return {'FINISHED'}
+
 
 class CXF_OT_reassing_ids(Operator):
     """Reassign entity IDs, only objects with IDs enabled will be affected"""
@@ -1127,12 +1416,20 @@ class CXF_OT_copy_props(Operator):
             "path_interpolation_tension": props.prop_path_interpolation_tension,
             "path_interpolation_order": props.prop_path_interpolation_order,
             "victims": [
-                getattr(context.object.victims, f"victim_{i}")
-                for i in range(props.prop_victim_count)
+                entry.name
+                for entry in context.object.victims.entries
             ],
             "arguments": [
-                getattr(context.object.arguments, f"value_{i}") & 0xFFFFFFFF
-                for i in range(props.prop_arg_count)
+                entry.value & 0xFFFFFFFF
+                for entry in context.object.arguments.entries
+            ],
+            "arbitrary_props": [
+                {
+                    "code": item.code,
+                    "name": item.name,
+                    "value": item.value & 0xFFFFFFFF
+                }
+                for item in props.arbitrary_props
             ],
         }
 
@@ -1173,30 +1470,209 @@ class CXF_OT_paste_props(Operator):
                 props.prop_path_interpolation_order = data.get("path_interpolation_order", 1)
 
                 victims = data.get("victims", [])
-                props.prop_victim_count = min(len(victims), MAX_VICTIMS)
-                for i, value in enumerate(victims[:MAX_VICTIMS]):
-                    setattr(obj.victims, f"victim_{i}", value)
+                obj.victims.entries.clear()
+                for value in victims[:MAX_VICTIMS]:
+                    entry = obj.victims.entries.add()
+                    entry.name = value
+                obj.victims.active_index = max(0, len(obj.victims.entries) - 1)
 
                 args = data.get("arguments", [])
-                props.prop_arg_count = min(len(args), MAX_ARGS)
-                for i, value in enumerate(args[:MAX_ARGS]):
+                obj.arguments.entries.clear()
+                for value in args[:MAX_ARGS]:
                     # uint32 -> int32
                     if value >= 0x80000000:
                         value -= 0x100000000
 
-                    setattr(
-                        obj.arguments,
-                        f"value_{i}",
-                        value
-                    )
+                    entry = obj.arguments.entries.add()
+                    entry.value = value
+                obj.arguments.active_index = max(0, len(obj.arguments.entries) - 1)
 
                 props.set_zone = data.get("zone", "")
+
+                props.arbitrary_props.clear()
+                for entry in data.get("arbitrary_props", []):
+                    item = props.arbitrary_props.add()
+                    item.code = entry.get("code", 0)
+                    item.name = entry.get("name", "")
+
+                    value = entry.get("value", 0)
+                    # uint32 -> int32
+                    if value >= 0x80000000:
+                        value -= 0x100000000
+                    item.value = value
 
             except Exception as e:
                 self.report({'ERROR'}, str(e))
                 return {'CANCELLED'}
 
         self.report({'INFO'}, "Properties pasted")
+        return {'FINISHED'}
+
+
+class CXF_OT_arbitrary_prop_add(Operator):
+    """Add a new arbitrary property to the active entity"""
+    bl_idname = "object.arbitrary_prop_add"
+    bl_label = "Add Arbitrary Property"
+
+    def execute(self, context):
+        obj = context.object
+        if obj is None:
+            self.report({'WARNING'}, "No object selected")
+            return {'CANCELLED'}
+
+        props = obj.entity_props
+        item = props.arbitrary_props.add()
+        item.code = 0
+        item.name = ""
+        item.value = 0
+        props.arbitrary_props_index = len(props.arbitrary_props) - 1
+        return {'FINISHED'}
+
+
+class CXF_OT_arbitrary_prop_remove(Operator):
+    """Remove the selected arbitrary property from the active entity"""
+    bl_idname = "object.arbitrary_prop_remove"
+    bl_label = "Remove Arbitrary Property"
+
+    def execute(self, context):
+        obj = context.object
+        if obj is None:
+            self.report({'WARNING'}, "No object selected")
+            return {'CANCELLED'}
+
+        props = obj.entity_props
+        index = props.arbitrary_props_index
+
+        if 0 <= index < len(props.arbitrary_props):
+            props.arbitrary_props.remove(index)
+            props.arbitrary_props_index = min(max(0, index - 1), len(props.arbitrary_props) - 1)
+
+        return {'FINISHED'}
+
+
+class CXF_OT_victim_add(Operator):
+    """Add a new victim to the active entity"""
+    bl_idname = "object.victim_add"
+    bl_label = "Add Victim"
+
+    def execute(self, context):
+        obj = context.object
+        if obj is None:
+            self.report({'WARNING'}, "No object selected")
+            return {'CANCELLED'}
+
+        entries = obj.victims.entries
+        if len(entries) >= MAX_VICTIMS:
+            self.report({'WARNING'}, f"Maximum of {MAX_VICTIMS} victims reached")
+            return {'CANCELLED'}
+
+        entries.add()
+        obj.victims.active_index = len(entries) - 1
+        return {'FINISHED'}
+
+
+class CXF_OT_victim_remove(Operator):
+    """Remove the selected victim from the active entity"""
+    bl_idname = "object.victim_remove"
+    bl_label = "Remove Victim"
+
+    def execute(self, context):
+        obj = context.object
+        if obj is None:
+            self.report({'WARNING'}, "No object selected")
+            return {'CANCELLED'}
+
+        entries = obj.victims.entries
+        index = obj.victims.active_index
+
+        if 0 <= index < len(entries):
+            entries.remove(index)
+            obj.victims.active_index = min(max(0, index - 1), len(entries) - 1)
+
+        return {'FINISHED'}
+
+
+class CXF_OT_argument_add(Operator):
+    """Add a new argument to the active entity"""
+    bl_idname = "object.argument_add"
+    bl_label = "Add Argument"
+
+    def execute(self, context):
+        obj = context.object
+        if obj is None:
+            self.report({'WARNING'}, "No object selected")
+            return {'CANCELLED'}
+
+        entries = obj.arguments.entries
+        if len(entries) >= MAX_ARGS:
+            self.report({'WARNING'}, f"Maximum of {MAX_ARGS} arguments reached")
+            return {'CANCELLED'}
+
+        entries.add()
+        obj.arguments.active_index = len(entries) - 1
+        return {'FINISHED'}
+
+
+class CXF_OT_argument_remove(Operator):
+    """Remove the selected argument from the active entity"""
+    bl_idname = "object.argument_remove"
+    bl_label = "Remove Argument"
+
+    def execute(self, context):
+        obj = context.object
+        if obj is None:
+            self.report({'WARNING'}, "No object selected")
+            return {'CANCELLED'}
+
+        entries = obj.arguments.entries
+        index = obj.arguments.active_index
+
+        if 0 <= index < len(entries):
+            entries.remove(index)
+            obj.arguments.active_index = min(max(0, index - 1), len(entries) - 1)
+
+        return {'FINISHED'}
+
+
+class CXF_OT_neighbour_add(Operator):
+    """Add a new explicit neighbour to the active zone"""
+    bl_idname = "object.neighbour_add"
+    bl_label = "Add Explicit Neighbour"
+
+    def execute(self, context):
+        obj = context.object
+        if obj is None:
+            self.report({'WARNING'}, "No object selected")
+            return {'CANCELLED'}
+
+        entries = obj.zone_props.entries
+        if len(entries) >= MAX_NEIGHBOURS:
+            self.report({'WARNING'}, f"Maximum of {MAX_NEIGHBOURS} explicit neighbours reached")
+            return {'CANCELLED'}
+
+        entries.add()
+        obj.zone_props.active_index = len(entries) - 1
+        return {'FINISHED'}
+
+
+class CXF_OT_neighbour_remove(Operator):
+    """Remove the selected explicit neighbour from the active zone"""
+    bl_idname = "object.neighbour_remove"
+    bl_label = "Remove Explicit Neighbour"
+
+    def execute(self, context):
+        obj = context.object
+        if obj is None:
+            self.report({'WARNING'}, "No object selected")
+            return {'CANCELLED'}
+
+        entries = obj.zone_props.entries
+        index = obj.zone_props.active_index
+
+        if 0 <= index < len(entries):
+            entries.remove(index)
+            obj.zone_props.active_index = min(max(0, index - 1), len(entries) - 1)
+
         return {'FINISHED'}
 
 

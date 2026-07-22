@@ -422,8 +422,8 @@ def export_entity(obj, depsgraph):
         "interp_tension": props.prop_path_interpolation_tension,
         "interp_order": props.prop_path_interpolation_order,
         "arguments": [
-            getattr(obj.arguments, f"value_{i}") & 0xFFFFFFFF
-            for i in range(props.prop_arg_count)
+            entry.value & 0xFFFFFFFF
+            for entry in obj.arguments.entries
         ],
         "positions": positions,
         "zindex": props.prop_zindex if props.prop_zindex_enabled else None,
@@ -432,9 +432,17 @@ def export_entity(obj, depsgraph):
         "c2e_override_pos_target": props.prop_c2e_override_pos_target if props.prop_c2e_override_pos_target else None,
         "c2e_override_mult": props.prop_c2e_override_mult,
         "victims": [
-            getattr(obj.victims, f"victim_{i}")
-            for i in range(props.prop_victim_count)
-            if getattr(obj.victims, f"victim_{i}", "").strip()
+            entry.name
+            for entry in obj.victims.entries
+            if entry.name.strip()
+        ] or None,
+        "arbitrary_props": [
+            {
+                "code": item.code,
+                "name": item.name,
+                "value": item.value & 0xFFFFFFFF
+            }
+            for item in props.arbitrary_props
         ] or None,
     }
 
@@ -449,9 +457,9 @@ def export_zone(obj, depsgraph):
     if hasattr(obj, 'zone_props'):
         zone = obj.zone_props
         neighbours = [
-            getattr(zone, f"explicit_neighbour_{i}")
-            for i in range(zone.explicit_neighbour_count)
-            if getattr(zone, f"explicit_neighbour_{i}", "").strip()
+            entry.name
+            for entry in zone.entries
+            if entry.name.strip()
         ] or None
         if neighbours is not None:
             data["explicit_neighbours"] = neighbours

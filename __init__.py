@@ -4,6 +4,7 @@ from bpy.props import (
     IntProperty,
     StringProperty,
     PointerProperty)
+from bpy.app.handlers import persistent
 from .crashxform import cxf
 from .csnvision import csn
 importlib.reload(cxf)
@@ -35,12 +36,21 @@ classes = [
     cxf.CXF_OT_optimization,
     cxf.CXF_OT_export_model_json,
     # csn
+    csn.ArbitraryProp,
+    csn.ArgumentEntry,
+    csn.VictimEntry,
+    csn.NeighbourEntry,
     csn.EntityProps,
     csn.WorldProps,
     csn.ZoneProps,
     csn.Arguments,
     csn.Victims,
     csn.CameraElements,
+    csn.PanelToggles,
+    csn.CXF_UL_arbitrary_props,
+    csn.CXF_UL_victims,
+    csn.CXF_UL_arguments,
+    csn.CXF_UL_neighbours,
     csn.CXF_PT_world_properties,
     csn.CXF_PT_zone_properties,
     csn.CXF_PT_prop,
@@ -48,12 +58,30 @@ classes = [
     csn.CXF_PT_tools,
     csn.CXF_PT_export_scenery,
     csn.CXF_OT_reassing_ids,
+    csn.CXF_OT_migrate_legacy_props,
     csn.CXF_OT_copy_props,
     csn.CXF_OT_paste_props,
     csn.CXF_OT_copy_cam_props,
     csn.CXF_OT_paste_cam_props,
+    csn.CXF_OT_arbitrary_prop_add,
+    csn.CXF_OT_arbitrary_prop_remove,
+    csn.CXF_OT_victim_add,
+    csn.CXF_OT_victim_remove,
+    csn.CXF_OT_argument_add,
+    csn.CXF_OT_argument_remove,
+    csn.CXF_OT_neighbour_add,
+    csn.CXF_OT_neighbour_remove,
     csn.CXF_OT_export_scenery_json
 ]
+
+@persistent
+def csn_migrate_legacy_props_on_load(dummy):
+    for obj in bpy.data.objects:
+        try:
+            csn.migrate_legacy_entity(obj)
+        except Exception as e:
+            print(f"[CSNvision] Legacy migration failed for '{obj.name}': {e}")
+
 
 def register():
     for cls in classes:
@@ -76,8 +104,15 @@ def register():
     bpy.types.Object.camera_elements = bpy.props.PointerProperty(type=csn.CameraElements)
     bpy.types.Object.world_props = PointerProperty(type=csn.WorldProps)
     bpy.types.Scene.next_entity_id = bpy.props.IntProperty(default=csn.DEFAULT_ID)
+    bpy.types.WindowManager.csn_panel_toggles = PointerProperty(type=csn.PanelToggles)
+
+    if csn_migrate_legacy_props_on_load not in bpy.app.handlers.load_post:
+        bpy.app.handlers.load_post.append(csn_migrate_legacy_props_on_load)
 
 def unregister():
+    if csn_migrate_legacy_props_on_load in bpy.app.handlers.load_post:
+        bpy.app.handlers.load_post.remove(csn_migrate_legacy_props_on_load)
+
     # cxf
     del bpy.types.Scene.utilities_settings
     del bpy.types.Scene.optimization_settings
@@ -92,6 +127,7 @@ def unregister():
     del bpy.types.Object.camera_elements
     del bpy.types.Object.world_props
     del bpy.types.Scene.next_entity_id
+    del bpy.types.WindowManager.csn_panel_toggles
 
     for cls in reversed(classes):
         bpy.utils.unregister_class(cls)
