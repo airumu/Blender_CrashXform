@@ -322,6 +322,15 @@ class ZoneProps(PropertyGroup):
         name="Neighbour Index",
         default=0
     )
+    excluded_entries: CollectionProperty(
+        type=NeighbourEntry,
+        name="Excluded Neighbours",
+        description="Excluded neighbour zone names"
+    )
+    excluded_active_index: IntProperty(
+        name="Excluded Neighbour Index",
+        default=0
+    )
 
 class CameraElements(PropertyGroup):
     pass
@@ -351,6 +360,11 @@ class PanelToggles(PropertyGroup):
     )
     neighbours_expanded: BoolProperty(
         name="Explicit Neighbours Expanded",
+        default=False,
+        options={'SKIP_SAVE'}
+    )
+    excluded_neighbours_expanded: BoolProperty(
+        name="Excluded Neighbours Expanded",
         default=False,
         options={'SKIP_SAVE'}
     )
@@ -1149,6 +1163,26 @@ class CXF_PT_zone_properties(Panel):
             col.operator(CXF_OT_neighbour_add.bl_idname, icon='ADD', text="")
             col.operator(CXF_OT_neighbour_remove.bl_idname, icon='REMOVE', text="")
 
+        box = layout.box()
+        header = box.row()
+        header.prop(
+            toggles, "excluded_neighbours_expanded",
+            icon='TRIA_DOWN' if toggles.excluded_neighbours_expanded else 'TRIA_RIGHT',
+            icon_only=True, emboss=False
+        )
+        header.label(text=f"Excluded Neighbours ({len(zone.excluded_entries)})")
+        if toggles.excluded_neighbours_expanded:
+            row = box.row()
+            row.template_list(
+                "CXF_UL_neighbours", "",
+                zone, "excluded_entries",
+                zone, "excluded_active_index",
+                rows=3
+            )
+            col = row.column(align=True)
+            col.operator(CXF_OT_excluded_neighbour_add.bl_idname, icon='ADD', text="")
+            col.operator(CXF_OT_excluded_neighbour_remove.bl_idname, icon='REMOVE', text="")
+
 
 class CXF_PT_tools(Panel):
     bl_label = "Utilities"
@@ -1672,6 +1706,48 @@ class CXF_OT_neighbour_remove(Operator):
         if 0 <= index < len(entries):
             entries.remove(index)
             obj.zone_props.active_index = min(max(0, index - 1), len(entries) - 1)
+
+        return {'FINISHED'}
+
+
+class CXF_OT_excluded_neighbour_add(Operator):
+    """Add a new excluded neighbour to the active zone"""
+    bl_idname = "object.excluded_neighbour_add"
+    bl_label = "Add Excluded Neighbour"
+
+    def execute(self, context):
+        obj = context.object
+        if obj is None:
+            self.report({'WARNING'}, "No object selected")
+            return {'CANCELLED'}
+
+        entries = obj.zone_props.excluded_entries
+        if len(entries) >= MAX_NEIGHBOURS:
+            self.report({'WARNING'}, f"Maximum of {MAX_NEIGHBOURS} excluded neighbours reached")
+            return {'CANCELLED'}
+
+        entries.add()
+        obj.zone_props.excluded_active_index = len(entries) - 1
+        return {'FINISHED'}
+
+
+class CXF_OT_excluded_neighbour_remove(Operator):
+    """Remove the selected excluded neighbour from the active zone"""
+    bl_idname = "object.excluded_neighbour_remove"
+    bl_label = "Remove Excluded Neighbour"
+
+    def execute(self, context):
+        obj = context.object
+        if obj is None:
+            self.report({'WARNING'}, "No object selected")
+            return {'CANCELLED'}
+
+        entries = obj.zone_props.excluded_entries
+        index = obj.zone_props.excluded_active_index
+
+        if 0 <= index < len(entries):
+            entries.remove(index)
+            obj.zone_props.excluded_active_index = min(max(0, index - 1), len(entries) - 1)
 
         return {'FINISHED'}
 

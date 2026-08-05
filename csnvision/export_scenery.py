@@ -464,6 +464,14 @@ def export_zone(obj, depsgraph):
         if neighbours is not None:
             data["explicit_neighbours"] = neighbours
 
+        excluded_neighbours = [
+            entry.name
+            for entry in zone.excluded_entries
+            if entry.name.strip()
+        ] or None
+        if excluded_neighbours is not None:
+            data["excluded_neighbours"] = excluded_neighbours
+
     return data
 
 

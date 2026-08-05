@@ -71,6 +71,8 @@ classes = [
     csn.CXF_OT_argument_remove,
     csn.CXF_OT_neighbour_add,
     csn.CXF_OT_neighbour_remove,
+    csn.CXF_OT_excluded_neighbour_add,
+    csn.CXF_OT_excluded_neighbour_remove,
     csn.CXF_OT_export_scenery_json
 ]
 
