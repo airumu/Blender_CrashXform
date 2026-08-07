@@ -639,6 +639,7 @@ for i in range(MAX_CAMERAS):
             ("coll_trans", "coll_trans", ""),
             ("elev_switch", "elev_switch", ""),
             ("elev_trans", "elev_trans", ""),
+            ("low_prio", "low_prio", ""),
         ],
         default="-"
     )
