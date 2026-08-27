@@ -1948,7 +1948,7 @@ class CXF_OT_copy_cam_props(Operator):
 class CXF_OT_apply_cam_property(Operator):
     """Apply a named set of camera attributes from the active instance to all selected cameras/instances"""
     bl_idname = "csn.apply_cam_property"
-    bl_label = "Apply Camera Property"
+    bl_label = "Apply camera property to all selected camera objects/instances"
 
     attrs: StringProperty(
         name="Attributes",
@@ -2057,7 +2057,7 @@ for key, attrs in _APPLY_WRAPPERS:
 
     NewOp = type(cls_name, (Operator,), {
         'bl_idname': bl_id,
-        'bl_label': 'Apply Camera Property',
+        'bl_label': "Apply camera property to all selected camera objects/instances",
         'bl_description': bl_desc,
         'execute': make_exec(attrs)
     })
