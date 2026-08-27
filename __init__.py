@@ -56,6 +56,7 @@ classes = [
     csn.CXF_PT_prop,
     csn.CXF_PT_camera,
     csn.CXF_PT_tools,
+    csn.CXF_OT_create_cam_instances,
     csn.CXF_PT_export_scenery,
     csn.CXF_OT_reassing_ids,
     csn.CXF_OT_migrate_legacy_props,
@@ -63,6 +64,7 @@ classes = [
     csn.CXF_OT_paste_props,
     csn.CXF_OT_copy_cam_props,
     csn.CXF_OT_paste_cam_props,
+    csn.CXF_OT_apply_cam_property,
     csn.CXF_OT_arbitrary_prop_add,
     csn.CXF_OT_arbitrary_prop_remove,
     csn.CXF_OT_victim_add,
@@ -75,6 +77,12 @@ classes = [
     csn.CXF_OT_excluded_neighbour_remove,
     csn.CXF_OT_export_scenery_json
 ]
+
+# Register static per-attribute apply operators generated in csn (if present)
+try:
+    classes.extend(csn.APPLY_OPERATOR_CLASSES)
+except Exception:
+    pass
 
 @persistent
 def csn_migrate_legacy_props_on_load(dummy):

@@ -243,7 +243,11 @@ class EntityProps(PropertyGroup):
 
 def make_camera_hex_getter(index, prop_name):
     def getter(self):
-        value = getattr(self, f"{prop_name}_value_{index}")
+        # Prefer _value_ naming but fall back to plain prop if present
+        value_attr = f"{prop_name}_value_{index}"
+        if not hasattr(self, value_attr):
+            value_attr = f"{prop_name}_{index}"
+        value = getattr(self, value_attr)
         value &= 0xFFFFFFFF
         return hex(value)
     return getter
@@ -254,7 +258,10 @@ def make_camera_hex_setter(index, prop_name):
             value = int(text, 16)
             if value >= 0x80000000:
                 value -= 0x100000000
-            setattr(self, f"{prop_name}_value_{index}", value)
+            target_attr = f"{prop_name}_value_{index}"
+            if not hasattr(self, target_attr):
+                target_attr = f"{prop_name}_{index}"
+            setattr(self, target_attr, value)
         except ValueError:
             pass
     return setter
@@ -368,6 +375,12 @@ class PanelToggles(PropertyGroup):
         default=False,
         options={'SKIP_SAVE'}
     )
+    camera_show_hex: BoolProperty(
+        name="Show Camera Hex",
+        description="Display camera int fields as hex strings when enabled",
+        default=False,
+        options={'SKIP_SAVE'}
+    )
 
 
 class WorldProps(PropertyGroup):
@@ -408,22 +421,26 @@ for i in range(MAX_CAMERAS):
         default=False
     )
     CameraElements.__annotations__[f"Panningx_value_{i}"] = IntProperty(
-        default=0x40,
+        name="",
+        description="Panning X",
+        default=0x40
     )
     CameraElements.__annotations__[f"Panningx_hex_{i}"] = StringProperty(
-        name=f"",
+        name="",
+        description="Panning X",
         get=make_camera_hex_getter(i, "Panningx"),
-        set=make_camera_hex_setter(i, "Panningx"),
-        description="Panning X"
+        set=make_camera_hex_setter(i, "Panningx")        
     )
     CameraElements.__annotations__[f"Panningy_value_{i}"] = IntProperty(
+        name="",
+        description="Panning Y",
         default=0x40
     )
     CameraElements.__annotations__[f"Panningy_hex_{i}"] = StringProperty(
-        name=f"",
+        name="",
+        description="Panning Y",
         get=make_camera_hex_getter(i, "Panningy"),
-        set=make_camera_hex_setter(i, "Panningy"),
-        description="Panning Y"
+        set=make_camera_hex_setter(i, "Panningy")        
     )
     
     # Wavy
@@ -433,18 +450,24 @@ for i in range(MAX_CAMERAS):
         default=False
     )
     CameraElements.__annotations__[f"fxcontrol1_value_{i}"] = IntProperty(
+        name="",
+        description="FX Control 1",
         default=0
     )
     CameraElements.__annotations__[f"fxcontrol1_hex_{i}"] = StringProperty(
         name="",
+        description="FX Control 1",
         get=make_camera_hex_getter(i, "fxcontrol1"),
         set=make_camera_hex_setter(i, "fxcontrol1")
     )
     CameraElements.__annotations__[f"fxcontrol2_value_{i}"] = IntProperty(
+        name="",
+        description="FX Control 2",
         default=0x14
     )
     CameraElements.__annotations__[f"fxcontrol2_hex_{i}"] = StringProperty(
         name="",
+        description="FX Control 2",
         get=make_camera_hex_getter(i, "fxcontrol2"),
         set=make_camera_hex_setter(i, "fxcontrol2")
     )
@@ -515,10 +538,13 @@ for i in range(MAX_CAMERAS):
         default=False
     )
     CameraElements.__annotations__[f"fog_distance_value_{i}"] = IntProperty(
+        name="",
+        description="Fog distance",
         default=0
     )
     CameraElements.__annotations__[f"fog_distance_hex_{i}"] = StringProperty(
         name="",
+        description="Fog distance",
         get=make_camera_hex_getter(i, "fog_distance"),
         set=make_camera_hex_setter(i, "fog_distance")
     )
@@ -556,31 +582,55 @@ for i in range(MAX_CAMERAS):
     )
     CameraElements.__annotations__[f"stars_amount_{i}"] = IntProperty(
         name = "",
-        description="Amount",
+        description="Star amount",
         default=0x1E8,
         min=0,
         max=65535
     )
+    CameraElements.__annotations__[f"stars_amount_hex_{i}"] = StringProperty(
+        name="",
+        description="Star amount",
+        get=make_camera_hex_getter(i, "stars_amount"),
+        set=make_camera_hex_setter(i, "stars_amount")
+    )
     CameraElements.__annotations__[f"stars_offset_{i}"] = IntProperty(
         name = "",
-        description="Offset",
+        description="Star offset",
         default=0x7D0,
         min=-32768,
         max=32767
     )
+    CameraElements.__annotations__[f"stars_offset_hex_{i}"] = StringProperty(
+        name="",
+        description="Star offset",
+        get=make_camera_hex_getter(i, "stars_offset"),
+        set=make_camera_hex_setter(i, "stars_offset")
+    )
     CameraElements.__annotations__[f"stars_zindex_{i}"] = IntProperty(
         name = "",
-        description="Z-Index",
+        description="Star zindex",
         default=0x380,
         min=-32768,
         max=32767
     )
+    CameraElements.__annotations__[f"stars_zindex_hex_{i}"] = StringProperty(
+        name="",
+        description="Star zindex",
+        get=make_camera_hex_getter(i, "stars_zindex"),
+        set=make_camera_hex_setter(i, "stars_zindex")
+    )
     CameraElements.__annotations__[f"stars_distribution_{i}"] = IntProperty(
         name = "",
-        description="Distribution",
+        description="Star distribution",
         default=2,
         min=0,
         max=65535
+    )
+    CameraElements.__annotations__[f"stars_distribution_hex_{i}"] = StringProperty(
+        name="",
+        description="Star distribution",
+        get=make_camera_hex_getter(i, "stars_distribution"),
+        set=make_camera_hex_setter(i, "stars_distribution")
     )
     
     # Distance
@@ -590,10 +640,13 @@ for i in range(MAX_CAMERAS):
         default=False
     )
     CameraElements.__annotations__[f"distance_value_{i}"] = IntProperty(
+        name="",
+        description="Distance",
         default=0x600
     )
     CameraElements.__annotations__[f"distance_hex_{i}"] = StringProperty(
-        name=f"",
+        name="",
+        description="Distance",
         get=make_camera_hex_getter(i, "distance"),
         set=make_camera_hex_setter(i, "distance")
     )
@@ -606,9 +659,16 @@ for i in range(MAX_CAMERAS):
     )
     CameraElements.__annotations__[f"spacing_{i}"] = IntProperty(
         name=f"",
+        description="Spacing",
         default=200,
         min=0,
         max=65535
+    )
+    CameraElements.__annotations__[f"spacing_hex_{i}"] = StringProperty(
+        name="",
+        description="Spacing",
+        get=make_camera_hex_getter(i, "spacing"),
+        set=make_camera_hex_setter(i, "spacing"),        
     )
     
     # Interpolate
@@ -673,24 +733,36 @@ for i in range(MAX_CAMERAS):
         description="Enable free move camera properties",
         default=False
     )
-    CameraElements.__annotations__[f"amount_value_{i}"] = IntProperty(default=0)
+    CameraElements.__annotations__[f"amount_value_{i}"] = IntProperty(
+        name="",
+        description="Freemove amount",
+        default=0
+        )
     CameraElements.__annotations__[f"amount_hex_{i}"] = StringProperty(
         name="",
-        description="Amount",
+        description="Freemove amount",
         get=make_camera_hex_getter(i, "amount"),
         set=make_camera_hex_setter(i, "amount")
     )
-    CameraElements.__annotations__[f"max_follow_dist_value_{i}"] = IntProperty(default=0)
+    CameraElements.__annotations__[f"max_follow_dist_value_{i}"] = IntProperty(
+        name="",
+        description="Freemove maxFollowDist",
+        default=0
+    )
     CameraElements.__annotations__[f"max_follow_dist_hex_{i}"] = StringProperty(
         name="",
-        description="Max Follow Dist",
+        description="Freemove maxFollowDist",
         get=make_camera_hex_getter(i, "max_follow_dist"),
         set=make_camera_hex_setter(i, "max_follow_dist")
     )
-    CameraElements.__annotations__[f"follow_strength_value_{i}"] = IntProperty(default=0)
+    CameraElements.__annotations__[f"follow_strength_value_{i}"] = IntProperty(
+        name="",
+        description="Freemove followStrength",
+        default=0
+    )
     CameraElements.__annotations__[f"follow_strength_hex_{i}"] = StringProperty(
         name="",
-        description="Follow Strength",
+        description="Freemove followStrength",
         get=make_camera_hex_getter(i, "follow_strength"),
         set=make_camera_hex_setter(i, "follow_strength")
     )
@@ -703,38 +775,68 @@ for i in range(MAX_CAMERAS):
     )
     CameraElements.__annotations__[f"particles_amount_{i}"] = IntProperty(
         name="",
-        description="Amount",
+        description="Particle amount",
         default=128,
         min=-32768,
         max=32767
     )
+    CameraElements.__annotations__[f"particles_amount_hex_{i}"] = StringProperty(
+        name="",
+        description="Particle amount",
+        get=make_camera_hex_getter(i, "particles_amount"),
+        set=make_camera_hex_setter(i, "particles_amount")
+    )
     CameraElements.__annotations__[f"particles_yoffset_{i}"] = IntProperty(
         name="",
-        description="Y Offset",
+        description="Particle offset",
         default=0,
         min=-32768,
         max=32767
+    )
+    CameraElements.__annotations__[f"particles_yoffset_hex_{i}"] = StringProperty(
+        name="",
+        description="Particle offset",
+        get=make_camera_hex_getter(i, "particles_yoffset"),
+        set=make_camera_hex_setter(i, "particles_yoffset")
     )
     CameraElements.__annotations__[f"particles_velx_{i}"] = IntProperty(
         name="",
-        description="Vel X",
+        description="Particle velX",
         default=0,
         min=-32768,
         max=32767
     )
+    CameraElements.__annotations__[f"particles_velx_hex_{i}"] = StringProperty(
+        name="",
+        description="particle velX",
+        get=make_camera_hex_getter(i, "particles_velx"),
+        set=make_camera_hex_setter(i, "particles_velx")
+    )
     CameraElements.__annotations__[f"particles_vely_{i}"] = IntProperty(
         name="",
-        description="Vel Y",
+        description="Particle velY",
         default=50,
         min=-32768,
         max=32767
     )
+    CameraElements.__annotations__[f"particles_vely_hex_{i}"] = StringProperty(
+        name="",
+        description="Particle velY",
+        get=make_camera_hex_getter(i, "particles_vely"),
+        set=make_camera_hex_setter(i, "particles_vely")
+    )
     CameraElements.__annotations__[f"particles_velz_{i}"] = IntProperty(
         name="",
-        description="Vel Z",
+        description="Particle velZ",
         default=0,
         min=-32768,
         max=32767
+    )
+    CameraElements.__annotations__[f"particles_velz_hex_{i}"] = StringProperty(
+        name="",
+        description="Particle velZ",
+        get=make_camera_hex_getter(i, "particles_velz"),
+        set=make_camera_hex_setter(i, "particles_velz")
     )
 
 # Panels
@@ -786,6 +888,8 @@ class CXF_PT_prop(Panel):
             return
 
         props = obj.entity_props
+
+        toggles = context.window_manager.csn_panel_toggles
 
         # marker
         layout.prop(props, "prop_marker")     
@@ -934,6 +1038,7 @@ class CXF_PT_camera(Panel):
             return
 
         props = obj.entity_props
+        toggles = context.window_manager.csn_panel_toggles
 
         # camera count
         layout.use_property_split = True
@@ -950,10 +1055,15 @@ class CXF_PT_camera(Panel):
         row.operator(CXF_OT_copy_cam_props.bl_idname, text="Copy Props")
         row.operator(CXF_OT_paste_cam_props.bl_idname, text="Paste Props")
 
+        # Toggle: show hex or int widgets for camera values
+        row = layout.row(align=True)
+        row.prop(toggles, "camera_show_hex", text="Show Hex", toggle=True)
+
         if props.cam_count == 0:
             return
         
         i = props.cam_selected - 1
+        show_hex = toggles.camera_show_hex
 
         box = layout.box()
         col = box.column()        
@@ -970,22 +1080,25 @@ class CXF_PT_camera(Panel):
         sub.label(text="Mode:")
         sub = row.column()       
         sub.prop(obj.camera_elements, f"mode_{i}")                        
+        op = row.operator("csn.apply_cam_mode", text="", icon='COPYDOWN', emboss=False)
         
         # Distance
         row = col.row(align=True)
         row.prop(obj.camera_elements, f"distance_enabled_{i}")
         sub = row.column()
         sub.enabled = getattr(obj.camera_elements, f"distance_enabled_{i}")
-        sub.prop(obj.camera_elements, f"distance_hex_{i}")
+        sub.prop(obj.camera_elements, f"distance_hex_{i}" if show_hex else f"distance_value_{i}")
+        op = row.operator("csn.apply_cam_distance", text="", icon='COPYDOWN', emboss=False)
         
         # Panning
         row = col.row(align=True)
-        split = row.split(factor=0.48)
+        split = row.split(factor=0.485)
         split.prop(obj.camera_elements, f"Panning_enabled_{i}")
         sub = split.row(align=True)
-        sub.enabled = getattr(obj.camera_elements, f"Panning_enabled_{i}")
-        sub.prop(obj.camera_elements, f"Panningx_hex_{i}")
-        sub.prop(obj.camera_elements, f"Panningy_hex_{i}")
+        sub.enabled = getattr(obj.camera_elements, f"Panning_enabled_{i}")        
+        sub.prop(obj.camera_elements, f"Panningx_hex_{i}" if show_hex else f"Panningx_value_{i}")
+        sub.prop(obj.camera_elements, f"Panningy_hex_{i}" if show_hex else f"Panningy_value_{i}")
+        op = row.operator("csn.apply_cam_panning", text="", icon='COPYDOWN', emboss=False)
         
         # Interpolate            
         row = col.row(align = True)
@@ -993,20 +1106,23 @@ class CXF_PT_camera(Panel):
         sub.label(text="Interpolation")
         sub = row.column()
         sub.prop(obj.camera_elements, f"interpolate_{i}")            
+        op = row.operator("csn.apply_cam_interpolate", text="", icon='COPYDOWN', emboss=False)
         
         # Spacing
         row = col.row(align=True)
         row.prop(obj.camera_elements, f"spacing_enabled_{i}")
         sub = row.column()
         sub.enabled = getattr(obj.camera_elements, f"spacing_enabled_{i}")
-        sub.prop(obj.camera_elements, f"spacing_{i}")
+        sub.prop(obj.camera_elements, f"spacing_hex_{i}" if show_hex else f"spacing_{i}")
+        op = row.operator("csn.apply_cam_spacing", text="", icon='COPYDOWN', emboss=False)
         
         # Fog distance
         row = col.row(align=True)
         row.prop(obj.camera_elements, f"fog_distance_enabled_{i}")
         sub = row.column()
         sub.enabled = getattr(obj.camera_elements, f"fog_distance_enabled_{i}")
-        sub.prop(obj.camera_elements, f"fog_distance_hex_{i}")
+        sub.prop(obj.camera_elements, f"fog_distance_hex_{i}" if show_hex else  f"fog_distance_value_{i}")
+        op = row.operator("csn.apply_cam_fog_distance", text="", icon='COPYDOWN', emboss=False)
         
         col.separator()
         
@@ -1014,11 +1130,12 @@ class CXF_PT_camera(Panel):
         row = col.row(align=True)                                    
         row.label(text="Transition:")                   
         row.prop(obj.camera_elements, f"transition_type_{i}")            
+        op = row.operator("csn.apply_cam_transition", text="", icon='COPYDOWN', emboss=False)
         
-        row = col.row(align=True)
-        row.enabled = getattr(obj.camera_elements, f"transition_type_{i}") != "-"
-        row.prop(obj.camera_elements, f"transition_smooth_{i}")
-        row.prop(obj.camera_elements, f"transition_target_cam_{i}")
+        split = col.split(factor=0.45)
+        split.enabled = getattr(obj.camera_elements, f"transition_type_{i}") != "-"
+        split.prop(obj.camera_elements, f"transition_smooth_{i}")
+        split.prop(obj.camera_elements, f"transition_target_cam_{i}")
         
         col.separator()
         
@@ -1026,12 +1143,14 @@ class CXF_PT_camera(Panel):
         row = col.row(align=True)
         row.label(text="Prop 198 type:")
         row.prop(obj.camera_elements, f"warp_in_target_type_{i}")
+        op = row.operator("csn.apply_cam_warp", text="", icon='COPYDOWN', emboss=False)
         
         sub = col.row(align=True)
         warp_type = getattr(obj.camera_elements, f"warp_in_target_type_{i}")
         sub.enabled = warp_type in ("warp-in", "bonus warp-in")
-        sub.label(text="Marker:")
-        sub.prop(obj.camera_elements, f"warp_in_target_{i}")
+        split = sub.split(factor=0.45)
+        split.label(text="Marker:")
+        split.prop(obj.camera_elements, f"warp_in_target_{i}")
         
         col.separator()
 
@@ -1041,6 +1160,7 @@ class CXF_PT_camera(Panel):
         sub = row.column()
         sub.enabled = getattr(obj.camera_elements, f"water_enabled_{i}")
         sub.prop(obj.camera_elements, f"water_target_{i}")
+        op = row.operator("csn.apply_cam_water", text="", icon='COPYDOWN', emboss=False)
 
         # Mirror
         row = col.row(align=True)
@@ -1048,6 +1168,7 @@ class CXF_PT_camera(Panel):
         sub = row.column()
         sub.enabled = getattr(obj.camera_elements, f"mirror_enabled_{i}")
         sub.prop(obj.camera_elements, f"mirror_target_{i}")
+        op = row.operator("csn.apply_cam_mirror", text="", icon='COPYDOWN', emboss=False)
 
         # Music
         row = col.row(align=True)
@@ -1055,70 +1176,92 @@ class CXF_PT_camera(Panel):
         sub = row.column()
         sub.enabled = getattr(obj.camera_elements, f"music_enabled_{i}")
         sub.prop(obj.camera_elements, f"music_target_{i}")
+        op = row.operator("csn.apply_cam_music", text="", icon='COPYDOWN', emboss=False)
 
         # Wavy
         row = col.row(align=True)
-        split = row.split(factor=0.48)
+        split = row.split(factor=0.485)
         split.prop(obj.camera_elements, f"wavy_enabled_{i}")
         sub = split.row(align=True)
         sub.enabled = getattr(obj.camera_elements, f"wavy_enabled_{i}")
-        sub.prop(obj.camera_elements, f"fxcontrol1_hex_{i}")
-        sub.prop(obj.camera_elements, f"fxcontrol2_hex_{i}")
+        sub.prop(obj.camera_elements, f"fxcontrol1_hex_{i}" if show_hex else f"fxcontrol1_value_{i}")
+        sub.prop(obj.camera_elements, f"fxcontrol2_hex_{i}" if show_hex else f"fxcontrol2_value_{i}")
+        op = row.operator("csn.apply_cam_wavy", text="", icon='COPYDOWN', emboss=False)
 
-        # Fade FX / Glow FX2
-        row = col.row(align=True)
+        # Fade FX
+        row = col.row(align=True)        
         row.prop(obj.camera_elements, f"fade_fx_enabled_{i}")
+        op = row.operator("csn.apply_cam_fadefx", text="", icon='COPYDOWN', emboss=False)
+        
+        # glow fx2
+        row = col.row(align=True)
         row.prop(obj.camera_elements, f"glow_fx2_enabled_{i}")
-
-        # Bonus / Consider 2D
+        op = row.operator("csn.apply_cam_glowfx", text="", icon='COPYDOWN', emboss=False)
+        
+        # Bonus
         row = col.row(align=True)
         row.prop(obj.camera_elements, f"bonus_{i}")
+        op = row.operator("csn.apply_cam_bonus", text="", icon='COPYDOWN', emboss=False)
+        
+        # consider 2D
+        row = col.row(align=True)        
         row.prop(obj.camera_elements, f"consider_2D_{i}")
+        op = row.operator("csn.apply_cam_consider2d", text="", icon='COPYDOWN', emboss=False)
         
         # dark
         row = col.row(align=True)
         row.label(text="Dark")
         row.prop(obj.camera_elements, f"dark_{i}")
+        op = row.operator("csn.apply_cam_dark", text="", icon='COPYDOWN', emboss=False)
         
         # cold
         row = col.row(align=True)
         row.label(text="Cold")
         row.prop(obj.camera_elements, f"cold_{i}")
+        op = row.operator("csn.apply_cam_cold", text="", icon='COPYDOWN', emboss=False)
 
         # Free move
         row = col.row(align=True)
-        split = row.split(factor=0.48)
+        split = row.split(factor=0.485)
         split.prop(obj.camera_elements, f"freemove_enabled_{i}")
         sub = split.row(align=True)
         sub.enabled = getattr(obj.camera_elements, f"freemove_enabled_{i}")
-        sub.prop(obj.camera_elements, f"amount_hex_{i}")
-        sub.prop(obj.camera_elements, f"max_follow_dist_hex_{i}")
-        sub.prop(obj.camera_elements, f"follow_strength_hex_{i}")
+        sub.prop(obj.camera_elements, f"amount_hex_{i}" if show_hex else f"amount_value_{i}")
+        sub.prop(obj.camera_elements, f"max_follow_dist_hex_{i}" if show_hex else f"max_follow_dist_value_{i}")
+        sub.prop(obj.camera_elements, f"follow_strength_hex_{i}" if show_hex else f"follow_strength_value_{i}")
+        op = row.operator("csn.apply_cam_freemove", text="", icon='COPYDOWN', emboss=False)
 
         # Particles
         row = col.row(align=True)
         row.prop(obj.camera_elements, f"particles_enabled_{i}")
-        row.prop(obj.camera_elements, f"particles_amount_{i}")
-        row.prop(obj.camera_elements, f"particles_yoffset_{i}")
+        sub = row.row(align=True)
+        sub.enabled = getattr(obj.camera_elements, f"particles_enabled_{i}")
+        sub.prop(obj.camera_elements, f"particles_amount_hex_{i}" if show_hex else f"particles_amount_{i}")
+        sub.prop(obj.camera_elements, f"particles_yoffset_hex_{i}" if show_hex else f"particles_yoffset_{i}")
+        op = row.operator("csn.apply_cam_particles", text="", icon='COPYDOWN', emboss=False)
 
         row = col.row(align=True)
-        row.prop(obj.camera_elements, f"particles_velx_{i}")
-        row.prop(obj.camera_elements, f"particles_vely_{i}")
-        row.prop(obj.camera_elements, f"particles_velz_{i}")
-                
+        sub = row.row(align=True)
+        sub.enabled = getattr(obj.camera_elements, f"particles_enabled_{i}")
+        sub.prop(obj.camera_elements, f"particles_velx_hex_{i}" if show_hex else f"particles_velx_{i}")
+        sub.prop(obj.camera_elements, f"particles_vely_hex_{i}" if show_hex else f"particles_vely_{i}")
+        sub.prop(obj.camera_elements, f"particles_velz_hex_{i}" if show_hex else f"particles_velz_{i}")
+             
         # Stars
         row = col.row(align=True)
         row.prop(obj.camera_elements, f"stars_enabled_{i}")
         sub = row.row(align=True)
         sub.enabled = getattr(obj.camera_elements, f"stars_enabled_{i}")
-        sub.prop(obj.camera_elements, f"stars_amount_{i}")
-        sub.prop(obj.camera_elements, f"stars_offset_{i}")
-
+        sub.prop(obj.camera_elements, f"stars_amount_hex_{i}" if show_hex else f"stars_amount_{i}")
+        sub.prop(obj.camera_elements, f"stars_offset_hex_{i}" if show_hex else f"stars_offset_{i}")
+        op = row.operator("csn.apply_cam_stars", text="", icon='COPYDOWN', emboss=False)
+        
         row = col.row(align=True)
-        row.enabled = getattr(obj.camera_elements, f"stars_enabled_{i}")
-        row.prop(obj.camera_elements, f"stars_zindex_{i}")
-        row.prop(obj.camera_elements, f"stars_distribution_{i}")
-            
+        sub = row.row(align = True)
+        sub.enabled = getattr(obj.camera_elements, f"stars_enabled_{i}")
+        sub.prop(obj.camera_elements, f"stars_zindex_hex_{i}" if show_hex else f"stars_zindex_{i}")
+        sub.prop(obj.camera_elements, f"stars_distribution_hex_{i}" if show_hex else f"stars_distribution_{i}")
+        
 
 class CXF_PT_zone_properties(Panel):
     bl_label = "Zone Properties"
@@ -1201,6 +1344,7 @@ class CXF_PT_tools(Panel):
 
         layout.operator(CXF_OT_reassing_ids.bl_idname, text="Reassign Entity IDs")
         layout.operator(CXF_OT_migrate_legacy_props.bl_idname, text="Migrate Legacy Props")
+        layout.operator("csn.create_cam_instances", text="Create Cam Instances")
 
 class CXF_PT_export_scenery(Panel):
     bl_label = "Export"
@@ -1270,23 +1414,6 @@ def _legacy_indices(struct, prefix):
     ]
 
 def migrate_legacy_entity(obj):
-    """Migrate an object's pre-collection victim/argument/neighbour data
-    (stored as 'victim_0', 'victim_1', ..., 'value_0', 'value_1', ..., and
-    'explicit_neighbour_0', 'explicit_neighbour_1', ... orphaned custom
-    properties from before these used a proper CollectionProperty) into the
-    new victims.entries / arguments.entries / zone_props.entries collections.
-
-    A slot that was never explicitly edited by the user has no underlying
-    stored property at all (Blender only persists a value once it's set),
-    so the original item count (previously 'prop_victim_count' /
-    'prop_arg_count' / 'explicit_neighbour_count', also now orphaned) is
-    used to reconstruct the full original list - including untouched /
-    zero-valued slots - rather than only the indices that happen to have
-    stored data.
-
-    Safe to call repeatedly: does nothing once entries already exist, or if
-    no legacy data is present.
-    """
     migrated = False
     entity_props = obj.entity_props if hasattr(obj, "entity_props") else None
 
@@ -1818,6 +1945,127 @@ class CXF_OT_copy_cam_props(Operator):
         return {'FINISHED'}
 
 
+class CXF_OT_apply_cam_property(Operator):
+    """Apply a named set of camera attributes from the active instance to all selected cameras/instances"""
+    bl_idname = "csn.apply_cam_property"
+    bl_label = "Apply Camera Property"
+
+    attrs: StringProperty(
+        name="Attributes",
+        description="Comma-separated list of camera element attribute base names to copy (without trailing _index)",
+        default=""
+    )
+
+    def execute(self, context):
+        src = context.object
+        if src is None or not export_scenery.is_camera(src):
+            self.report({'WARNING'}, "No source camera selected")
+            return {'CANCELLED'}
+
+        src_props = src.entity_props
+        src_index = src_props.cam_selected - 1
+        if src_props.cam_count == 0:
+            self.report({'WARNING'}, "Source camera has no instances")
+            return {'CANCELLED'}
+
+        attrs = [a.strip() for a in self.attrs.split(',') if a.strip()]
+        modified_objs = set()
+        modified_instances = 0
+
+        for obj in context.selected_objects:
+            if not export_scenery.is_camera(obj):
+                continue
+            cam_count = obj.entity_props.cam_count
+            if cam_count == 0:
+                continue
+
+            any_modified_for_obj = False
+            for j in range(cam_count):
+                instance_modified = False
+                for a in attrs:
+                    src_name = f"{a}_{src_index}"
+                    tgt_name = f"{a}_{j}"
+                    if not hasattr(src.camera_elements, src_name) or not hasattr(obj.camera_elements, tgt_name):
+                        continue
+                    try:
+                        src_val = getattr(src.camera_elements, src_name)
+                        tgt_val = getattr(obj.camera_elements, tgt_name)
+                    except Exception:
+                        continue
+
+                    # Only set and count if value would change
+                    if src_val != tgt_val:
+                        try:
+                            setattr(obj.camera_elements, tgt_name, src_val)
+                            instance_modified = True
+                        except Exception:
+                            continue
+
+                if instance_modified:
+                    modified_instances += 1
+                    any_modified_for_obj = True
+
+            if any_modified_for_obj:
+                modified_objs.add(obj.name)
+
+        self.report({'INFO'}, f"Applied property to {len(modified_objs)} cameras ({modified_instances} instances)")
+        return {'FINISHED'}
+
+
+_APPLY_WRAPPERS = [
+    ("mode", "mode"),
+    ("distance", "distance_enabled,distance_hex,distance_value"),
+    ("panning", "Panning_enabled,Panningx_value,Panningx_hex,Panningy_value,Panningy_hex"),
+    ("interpolate", "interpolate"),
+    ("spacing", "spacing_enabled,spacing,spacing_hex"),
+    ("fog_distance", "fog_distance_enabled,fog_distance_hex,fog_distance_value"),
+    ("transition", "transition_type,transition_smooth,transition_target_cam"),
+    ("warp", "warp_in_target_type,warp_in_target"),
+    ("water", "water_enabled,water_target"),
+    ("mirror", "mirror_enabled,mirror_target"),
+    ("music", "music_enabled,music_target"),
+    ("wavy", "wavy_enabled,fxcontrol1_value,fxcontrol1_hex,fxcontrol2_value,fxcontrol2_hex"),
+    ("fadefx", "fade_fx_enabled"),
+    ("glowfx", "glow_fx_enabled"),
+    ("bonus", "bonus"),
+    ("consider2d", "consider_2D"),
+    ("dark", "dark"),
+    ("cold", "cold"),
+    ("freemove", "freemove_enabled,amount_value,amount_hex,max_follow_dist_value,max_follow_dist_hex,follow_strength_value,follow_strength_hex"),
+    ("particles", "particles_enabled,particles_amount,particles_amount_hex,particles_yoffset,particles_yoffset_hex,particles_velx,particles_velx_hex,particles_vely,particles_vely_hex,particles_velz,particles_velz_hex"),
+    ("stars", "stars_enabled,stars_amount,stars_amount_hex,stars_offset,stars_offset_hex,stars_zindex,stars_zindex_hex,stars_distribution,stars_distribution_hex"),
+]
+
+APPLY_OPERATOR_CLASSES = []
+for key, attrs in _APPLY_WRAPPERS:
+    bl_id = f"csn.apply_cam_{key}"
+    cls_name = f"CXF_OT_apply_cam_{key}"
+    bl_desc = f"Apply: {attrs}"
+
+    def make_exec(attrs_str):
+        def execute(self, context):
+            try:
+                # Call the generic operator and pass the attrs string
+                res = bpy.ops.csn.apply_cam_property('INVOKE_DEFAULT', attrs=attrs_str)
+                # bpy.ops returns a set-like result; translate to operator return
+                if isinstance(res, set):
+                    return res
+            except Exception:
+                pass
+            return {'FINISHED'}
+        return execute
+
+    NewOp = type(cls_name, (Operator,), {
+        'bl_idname': bl_id,
+        'bl_label': 'Apply Camera Property',
+        'bl_description': bl_desc,
+        'execute': make_exec(attrs)
+    })
+    APPLY_OPERATOR_CLASSES.append(NewOp)
+    APPLY_OPERATOR_CLASSES[-1].__name__ = cls_name
+    globals()[cls_name] = APPLY_OPERATOR_CLASSES[-1]
+
+
 class CXF_OT_paste_cam_props(Operator):
     """Paste camera properties to the all property instances on all selected objects"""
     bl_idname = "object.paste_cam_props"
@@ -1908,3 +2156,39 @@ class CXF_OT_export_scenery_json(Operator):
 
         self.report({'INFO'}, "Export complete")
         return {'FINISHED'}
+
+
+class CXF_OT_create_cam_instances(Operator):
+    """Set camera instance counts from comma-delimited identifiers in object names"""
+    bl_idname = "csn.create_cam_instances"
+    bl_label = "Create Cam Instances"
+
+    def execute(self, context):
+        affected_objects = 0
+        affected_instances = 0
+
+        for obj in bpy.data.objects:
+            try:
+                if not export_scenery.is_camera(obj):
+                    continue
+
+                ids = [s.strip() for s in obj.name.split(',') if s.strip()]
+                target_count = len(ids)
+                if target_count == 0:
+                    continue
+
+                props = obj.entity_props
+                current = getattr(props, 'cam_count', 0)
+                if current != target_count:
+                    props.cam_count = target_count
+                    affected_objects += 1
+                    affected_instances += (target_count - current)
+            except Exception:
+                continue
+
+        if affected_objects:
+            self.report({'INFO'}, f"Updated {affected_objects} cameras ({affected_instances} instances)")
+            return {'FINISHED'}
+        else:
+            self.report({'INFO'}, "No cameras needed updating")
+            return {'CANCELLED'}

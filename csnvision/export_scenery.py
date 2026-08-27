@@ -563,6 +563,13 @@ def export_scene(context):
     for obj in bpy.data.objects:
         if is_entity(obj):
             scene_data["entities"].append(export_entity(obj, depsgraph))
+            collection_key = "entity_mesh_řäї"
+            if collection_key not in world_meshes_by_collection:
+                world_meshes_by_collection[collection_key] = []
+                world_skybox_by_collection[collection_key] = False
+            data = export_mesh(obj, depsgraph, "entity")
+            if data is not None:
+                world_meshes_by_collection[collection_key].append(data)
             continue
         
         if is_zone(obj):
