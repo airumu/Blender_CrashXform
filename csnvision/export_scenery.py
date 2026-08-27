@@ -28,9 +28,18 @@ def get_texture_name(material):
     for node in material.node_tree.nodes:
         if node.type == 'TEX_IMAGE' and node.image is not None:
             raw = node.image.filepath_raw
-            if raw:
-                return os.path.basename(bpy.path.abspath(raw))
-            # Fallback: use the datablock name (packed images, etc.)
+            if raw:            
+                try:
+                    abs_path = bpy.path.abspath(raw)
+                    blend_path = bpy.data.filepath
+                    blend_dir = os.path.dirname(blend_path)
+                    try:
+                        rel = os.path.relpath(abs_path, start=blend_dir)
+                    except Exception:                        
+                        rel = os.path.basename(abs_path)                    
+                    return rel.replace('\\', '/')
+                except Exception:
+                    return os.path.basename(bpy.path.abspath(raw))            
             return node.image.name
 
     return None
