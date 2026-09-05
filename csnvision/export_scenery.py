@@ -5,19 +5,24 @@ import os
 import time
 import numpy as np
 
+
 # helpers
 def r2(values):
     return [round(x, 2) for x in values]
 
+
 def yup_pos(v):
     return r2([v[0] * 400, -v[1] * 400, v[2] * 400])
 
+
 def yup_euler_deg(euler):
-    return r2([
-        math.degrees(euler[0]),
-        math.degrees(euler[1]),
-        math.degrees(euler[2]),
-    ])
+    return r2(
+        [
+            math.degrees(euler[0]),
+            math.degrees(euler[1]),
+            math.degrees(euler[2]),
+        ]
+    )
 
 
 # texture helper
@@ -26,61 +31,46 @@ def get_texture_name(material):
         return None
 
     for node in material.node_tree.nodes:
-        if node.type == 'TEX_IMAGE' and node.image is not None:
+        if node.type == "TEX_IMAGE" and node.image is not None:
             raw = node.image.filepath_raw
-            if raw:            
+            if raw:
                 try:
                     abs_path = bpy.path.abspath(raw)
                     blend_path = bpy.data.filepath
                     blend_dir = os.path.dirname(blend_path)
                     try:
                         rel = os.path.relpath(abs_path, start=blend_dir)
-                    except Exception:                        
-                        rel = os.path.basename(abs_path)                    
-                    return rel.replace('\\', '/')
+                    except Exception:
+                        rel = os.path.basename(abs_path)
+                    return rel.replace("\\", "/")
                 except Exception:
-                    return os.path.basename(bpy.path.abspath(raw))            
+                    return os.path.basename(bpy.path.abspath(raw))
             return node.image.name
-
-    return None
-
-
-# color helper
-def get_loop_color(mesh, loop_idx, vertex_index):
-    for attr in mesh.color_attributes:
-
-        if attr.domain == 'CORNER':
-            return r2(attr.data[loop_idx].color)
-
-        elif attr.domain == 'POINT':
-            return r2(attr.data[vertex_index].color)
 
     return None
 
 
 def export_mesh(obj, depsgraph, exp_type):
     import numpy as np
+
     try:
         obj_eval = obj.evaluated_get(depsgraph)
-        mesh     = obj_eval.to_mesh()
+        mesh = obj_eval.to_mesh()
     except Exception as exc:
         print(f"[WARN] Could not evaluate mesh '{obj.name}': {exc}")
         return None
 
     world_mat = obj.matrix_world
-    uv_layer  = (
-        mesh.uv_layers[0]
-        if mesh.uv_layers else None
-    )
+    uv_layer = mesh.uv_layers[0] if mesh.uv_layers else None
 
     # Build a vertex-group-index → fx value map for fx_1/fx_2/fx_3 groups.
     fx_group_map = {}
     for vg in obj.vertex_groups:
-        if vg.name == 'fx_1':
+        if vg.name == "fx_1" or vg.name == "fx1":
             fx_group_map[vg.index] = 1
-        elif vg.name == 'fx_2':
+        elif vg.name == "fx_2" or vg.name == "fx2":
             fx_group_map[vg.index] = 2
-        elif vg.name == 'fx_3':
+        elif vg.name == "fx_3" or vg.name == "fx3":
             fx_group_map[vg.index] = 3
 
     # ==========================================
@@ -95,9 +85,9 @@ def export_mesh(obj, depsgraph, exp_type):
 
     # Reshape and perform Y-up swizzling, scaling, and rounding using NumPy
     coords = co_flat.reshape(num_verts, 3)
-    coords[:, 0] *= 400   # X * 400
+    coords[:, 0] *= 400  # X * 400
     coords[:, 1] *= -400  # -Y * 400
-    coords[:, 2] *= 400   # Z * 400
+    coords[:, 2] *= 400  # Z * 400
     coords = np.round(coords, 3)
     coords_list = coords.tolist()
 
@@ -114,7 +104,7 @@ def export_mesh(obj, depsgraph, exp_type):
     # ==========================================
     # 2. PRE-EXTRACT FACE STRUCTURE & LOOKUPS
     # ==========================================
-    faces         = []
+    faces = []
     skipped_count = 0
 
     num_polys = len(mesh.polygons)
@@ -135,10 +125,7 @@ def export_mesh(obj, depsgraph, exp_type):
     mat_cache = {}
     for i, mat in enumerate(mesh.materials):
         if mat is not None:
-            mat_cache[i] = {
-                "name": mat.name,
-                "texture": get_texture_name(mat)
-            }
+            mat_cache[i] = {"name": mat.name, "texture": get_texture_name(mat)}
 
     # Pre-extract UVs globally using NumPy
     uv_data = None
@@ -153,13 +140,13 @@ def export_mesh(obj, depsgraph, exp_type):
     color_domain = None
 
     for attr in mesh.color_attributes:
-        if attr.data_type in {'FLOAT_COLOR', 'BYTE_COLOR'}:
+        if attr.data_type in {"FLOAT_COLOR", "BYTE_COLOR"}:
             has_colors = True
             color_domain = attr.domain
             color_flat = np.empty(len(attr.data) * 4, dtype=np.float32)
             attr.data.foreach_get("color", color_flat)
             color_data = np.round(color_flat.reshape(-1, 4), 3).tolist()
-            break # Match original behavior: first matching color attribute wins
+            break  # Match original behavior: first matching color attribute wins
 
     # ==========================================
     # 3. ITERATION OVER POLYGONS
@@ -191,27 +178,29 @@ def export_mesh(obj, depsgraph, exp_type):
 
         # Fast sliced Vertex Color extraction
         if has_colors:
-            if color_domain == 'CORNER':
+            if color_domain == "CORNER":
                 face["colors"] = color_data[poly_loops]
-            elif color_domain == 'POINT':
+            elif color_domain == "POINT":
                 face["colors"] = [color_data[v_idx] for v_idx in verts]
 
         faces.append(face)
 
     if skipped_count:
-        print(f"[WARN] Mesh '{obj.name}': skipped {skipped_count} face(s) "
-              f"that were neither triangles nor quads (n-gons). ")
+        print(
+            f"[WARN] Mesh '{obj.name}': skipped {skipped_count} face(s) "
+            f"that were neither triangles nor quads (n-gons). "
+        )
 
-    obj_eval.to_mesh_clear()    
+    obj_eval.to_mesh_clear()
 
     result = {
-        "type":  exp_type,
-        "name":  obj.name,
+        "type": exp_type,
+        "name": obj.name,
         "verts": vertices,
         "faces": faces,
     }
 
-    if is_world(obj) and hasattr(obj, 'world_props') and obj.world_props.skybox:
+    if is_world(obj) and hasattr(obj, "world_props") and obj.world_props.skybox:
         result["skybox"] = True
     if is_collision(obj) and hasattr(obj, "world_props") and obj.world_props.fill:
         result["fill"] = True
@@ -223,23 +212,23 @@ def merge_meshes(mesh_list, collection_name, skybox=False):
     """Merge multiple mesh exports into a single mesh."""
     if not mesh_list:
         return None
-    
+
     merged_verts = []
     merged_faces = []
     vertex_offset = 0
-    
+
     for mesh_data in mesh_list:
         # Add vertices
         merged_verts.extend(mesh_data["verts"])
-        
+
         # Add faces with adjusted vertex indices
         for face in mesh_data["faces"]:
             adjusted_face = face.copy()
             adjusted_face["verts"] = [v + vertex_offset for v in adjusted_face["verts"]]
             merged_faces.append(adjusted_face)
-        
+
         vertex_offset += len(mesh_data["verts"])
-    
+
     result = {
         "type": "world",
         "name": collection_name,
@@ -256,11 +245,10 @@ def merge_meshes(mesh_list, collection_name, skybox=False):
 # camera export
 def export_camera(obj):
     world_mat = obj.matrix_world
-    pos        = world_mat.translation
-    euler      = world_mat.to_euler('XYZ')
+    pos = world_mat.translation
+    euler = world_mat.to_euler("XYZ")
 
-    collections = [c.name for c in obj.users_collection
-                   if c.name != "Scene Collection"]
+    collections = [c.name for c in obj.users_collection if c.name != "Scene Collection"]
     collection_name = collections[0] if collections else None
 
     if collection_name is None:
@@ -268,8 +256,7 @@ def export_camera(obj):
 
     if collection_name:
         prefixed = ", ".join(
-            f"{collection_name}_{part.strip()}"
-            for part in obj.name.split(",")
+            f"{collection_name}_{part.strip()}" for part in obj.name.split(",")
         )
     else:
         prefixed = obj.name
@@ -277,9 +264,9 @@ def export_camera(obj):
     camera_info = export_camera_info(obj)
 
     data = {
-        "name":       prefixed,
-        "pos":        yup_pos(pos),
-        "rot":        yup_euler_deg(euler),
+        "name": prefixed,
+        "pos": yup_pos(pos),
+        "rot": yup_euler_deg(euler),
     }
 
     if camera_info is not None:
@@ -287,7 +274,9 @@ def export_camera(obj):
 
     return data
 
+
 # camera info export
+
 
 def export_camera_info(obj):
     if not hasattr(obj, "entity_props") or not hasattr(obj, "camera_elements"):
@@ -328,85 +317,118 @@ def export_camera_info(obj):
         stars_distribution = getattr(obj.camera_elements, f"stars_distribution_{i}", 0)
         fxcontrol1_val = getattr(obj.camera_elements, f"fxcontrol1_value_{i}", 0)
         fxcontrol2_val = getattr(obj.camera_elements, f"fxcontrol2_value_{i}", 0)
-        transition_target_cam = getattr(obj.camera_elements, f"transition_target_cam_{i}", "")
+        transition_target_cam = getattr(
+            obj.camera_elements, f"transition_target_cam_{i}", ""
+        )
         fog_distance_val = getattr(obj.camera_elements, f"fog_distance_value_{i}", 0)
         transition_type = getattr(obj.camera_elements, f"transition_type_{i}", None)
-        transition_smooth = getattr(obj.camera_elements, f"transition_smooth_{i}", False)
-        warp_in_target_type = getattr(obj.camera_elements, f"warp_in_target_type_{i}", "-")
+        transition_smooth = getattr(
+            obj.camera_elements, f"transition_smooth_{i}", False
+        )
+        warp_in_target_type = getattr(
+            obj.camera_elements, f"warp_in_target_type_{i}", "-"
+        )
         warp_in_target_marker = getattr(obj.camera_elements, f"warp_in_target_{i}", "")
         enabled_freemove = getattr(obj.camera_elements, f"freemove_enabled_{i}", False)
         freemove_amount = getattr(obj.camera_elements, f"amount_value_{i}", 0)
-        freemove_max_follow_dist = getattr(obj.camera_elements, f"max_follow_dist_value_{i}", 0)
-        freemove_follow_strength = getattr(obj.camera_elements, f"follow_strength_value_{i}", 0)
-        enabled_particles = getattr(obj.camera_elements, f"particles_enabled_{i}", False)
+        freemove_max_follow_dist = getattr(
+            obj.camera_elements, f"max_follow_dist_value_{i}", 0
+        )
+        freemove_follow_strength = getattr(
+            obj.camera_elements, f"follow_strength_value_{i}", 0
+        )
+        enabled_particles = getattr(
+            obj.camera_elements, f"particles_enabled_{i}", False
+        )
         particles_amount = getattr(obj.camera_elements, f"particles_amount_{i}", 0)
         particles_yoffset = getattr(obj.camera_elements, f"particles_yoffset_{i}", 0)
         particles_velx = getattr(obj.camera_elements, f"particles_velx_{i}", 0)
         particles_vely = getattr(obj.camera_elements, f"particles_vely_{i}", 0)
         particles_velz = getattr(obj.camera_elements, f"particles_velz_{i}", 0)
-        
-        elements.append({
-            "mode": getattr(obj.camera_elements, f"mode_{i}", None),
-            "panningx": panningx_val & 0xFFFFFFFF if enabled_panning else None,
-            "panningy": panningy_val & 0xFFFFFFFF if enabled_panning else None,
-            "distance": distance_val & 0xFFFFFFFF if enabled_distance else None,
-            "spacing": spacing_val if enabled_spacing else None,
-            "water": water_target if enabled_water else None,
-            "mirror": mirror_target if enabled_mirror else None,
-            "music": music_target if enabled_music else None,            
-            "fadein_fx1": True if enabled_fade else None,
-            "glow_fx2": True if enabled_glow else None,
-            "bonus": True if enabled_bonus else None,
-            "consider_2D": True if enabled_consider_2d else None,
-            "dark": dark_val,
-            "cold": cold_val,
-            "fog_distance": fog_distance_val & 0xFFFFFFFF if enabled_fog else None,
-            "wavy": enabled_wavy,
-            "fxcontrol1": fxcontrol1_val & 0xFFFFFFFF if enabled_wavy else None,
-            "fxcontrol2": fxcontrol2_val & 0xFFFFFFFF if enabled_wavy else None,
-            "transition": {
-                "target_cam": transition_target_cam,
-                "type": transition_type,
-                "smooth": transition_smooth,
-            } if transition_type != "-" else None,
-            "interpolate": getattr(obj.camera_elements, f"interpolate_{i}", None),
-            "warp_in_target_type": warp_in_target_type if warp_in_target_type != '-' else None,
-            "warp_in_target_marker": warp_in_target_marker if warp_in_target_type != '-' else None,
-            "freemove": {
-                "amount": freemove_amount & 0xFFFFFFFF,
-                "max_follow_dist": freemove_max_follow_dist & 0xFFFFFFFF,
-                "follow_strength": freemove_follow_strength & 0xFFFFFFFF,
-            } if enabled_freemove else None,
-            "particles": {
-                "amount": particles_amount & 0xFFFFFFFF,
-                "yoffset": particles_yoffset & 0xFFFFFFFF,
-                "velx": particles_velx & 0xFFFFFFFF,
-                "vely": particles_vely & 0xFFFFFFFF,
-                "velz": particles_velz & 0xFFFFFFFF,
-            } if enabled_particles else None,"stars": {
-                "amount": stars_amount & 0xFFFFFFFF,
-                "offset": stars_offset & 0xFFFFFFFF,
-                "zindex": stars_zindex & 0xFFFFFFFF,
-                "distribution": stars_distribution & 0xFFFFFFFF,
-            } if enabled_stars else None,
-        })
+
+        elements.append(
+            {
+                "mode": getattr(obj.camera_elements, f"mode_{i}", None),
+                "panningx": panningx_val & 0xFFFFFFFF if enabled_panning else None,
+                "panningy": panningy_val & 0xFFFFFFFF if enabled_panning else None,
+                "distance": distance_val & 0xFFFFFFFF if enabled_distance else None,
+                "spacing": spacing_val if enabled_spacing else None,
+                "water": water_target if enabled_water else None,
+                "mirror": mirror_target if enabled_mirror else None,
+                "music": music_target if enabled_music else None,
+                "fadein_fx1": True if enabled_fade else None,
+                "glow_fx2": True if enabled_glow else None,
+                "bonus": True if enabled_bonus else None,
+                "consider_2D": True if enabled_consider_2d else None,
+                "dark": dark_val,
+                "cold": cold_val,
+                "fog_distance": fog_distance_val & 0xFFFFFFFF if enabled_fog else None,
+                "wavy": enabled_wavy,
+                "fxcontrol1": fxcontrol1_val & 0xFFFFFFFF if enabled_wavy else None,
+                "fxcontrol2": fxcontrol2_val & 0xFFFFFFFF if enabled_wavy else None,
+                "transition": (
+                    {
+                        "target_cam": transition_target_cam,
+                        "type": transition_type,
+                        "smooth": transition_smooth,
+                    }
+                    if transition_type != "-"
+                    else None
+                ),
+                "interpolate": getattr(obj.camera_elements, f"interpolate_{i}", None),
+                "warp_in_target_type": (
+                    warp_in_target_type if warp_in_target_type != "-" else None
+                ),
+                "warp_in_target_marker": (
+                    warp_in_target_marker if warp_in_target_type != "-" else None
+                ),
+                "freemove": (
+                    {
+                        "amount": freemove_amount & 0xFFFFFFFF,
+                        "max_follow_dist": freemove_max_follow_dist & 0xFFFFFFFF,
+                        "follow_strength": freemove_follow_strength & 0xFFFFFFFF,
+                    }
+                    if enabled_freemove
+                    else None
+                ),
+                "particles": (
+                    {
+                        "amount": particles_amount & 0xFFFFFFFF,
+                        "yoffset": particles_yoffset & 0xFFFFFFFF,
+                        "velx": particles_velx & 0xFFFFFFFF,
+                        "vely": particles_vely & 0xFFFFFFFF,
+                        "velz": particles_velz & 0xFFFFFFFF,
+                    }
+                    if enabled_particles
+                    else None
+                ),
+                "stars": (
+                    {
+                        "amount": stars_amount & 0xFFFFFFFF,
+                        "offset": stars_offset & 0xFFFFFFFF,
+                        "zindex": stars_zindex & 0xFFFFFFFF,
+                        "distribution": stars_distribution & 0xFFFFFFFF,
+                    }
+                    if enabled_stars
+                    else None
+                ),
+            }
+        )
 
     return elements
 
+
 # camera curve export
-def export_camera_curve(obj, depsgraph):    
-    collections = [c.name for c in obj.users_collection
-                   if c.name != "Scene Collection"]        
+def export_camera_curve(obj, depsgraph):
+    collections = [c.name for c in obj.users_collection if c.name != "Scene Collection"]
     collection_name = collections[0] if collections else None
-    
+
     curve_points = get_curve_points([obj], depsgraph)
     positions = [yup_pos(p) for p in curve_points]
-    
-    data = {
-        "pathid": collection_name,
-        "positions": positions
-    }
+
+    data = {"pathid": collection_name, "positions": positions}
     return data
+
 
 # entity export
 def export_entity(obj, depsgraph):
@@ -430,32 +452,28 @@ def export_entity(obj, depsgraph):
         "interp_len": props.prop_path_interpolation_length,
         "interp_tension": props.prop_path_interpolation_tension,
         "interp_order": props.prop_path_interpolation_order,
-        "arguments": [
-            entry.value & 0xFFFFFFFF
-            for entry in obj.arguments.entries
-        ],
+        "arguments": [entry.value & 0xFFFFFFFF for entry in obj.arguments.entries],
         "positions": positions,
         "zindex": props.prop_zindex if props.prop_zindex_enabled else None,
         "dda_section": props.prop_dda_section if props.prop_dda_enabled else None,
         "dda_count": props.prop_dda_count if props.prop_dda_enabled else None,
-        "c2e_override_pos_target": props.prop_c2e_override_pos_target if props.prop_c2e_override_pos_target else None,
+        "c2e_override_pos_target": (
+            props.prop_c2e_override_pos_target
+            if props.prop_c2e_override_pos_target
+            else None
+        ),
         "c2e_override_mult": props.prop_c2e_override_mult,
-        "victims": [
-            entry.name
-            for entry in obj.victims.entries
-            if entry.name.strip()
-        ] or None,
+        "victims": [entry.name for entry in obj.victims.entries if entry.name.strip()]
+        or None,
         "arbitrary_props": [
-            {
-                "code": item.code,
-                "name": item.name,
-                "value": item.value & 0xFFFFFFFF
-            }
+            {"code": item.code, "name": item.name, "value": item.value & 0xFFFFFFFF}
             for item in props.arbitrary_props
-        ] or None,
+        ]
+        or None,
     }
 
     return data
+
 
 # zone export
 def export_zone(obj, depsgraph):
@@ -463,20 +481,16 @@ def export_zone(obj, depsgraph):
     if data is None:
         return None
 
-    if hasattr(obj, 'zone_props'):
+    if hasattr(obj, "zone_props"):
         zone = obj.zone_props
         neighbours = [
-            entry.name
-            for entry in zone.entries
-            if entry.name.strip()
+            entry.name for entry in zone.entries if entry.name.strip()
         ] or None
         if neighbours is not None:
             data["explicit_neighbours"] = neighbours
 
         excluded_neighbours = [
-            entry.name
-            for entry in zone.excluded_entries
-            if entry.name.strip()
+            entry.name for entry in zone.excluded_entries if entry.name.strip()
         ] or None
         if excluded_neighbours is not None:
             data["excluded_neighbours"] = excluded_neighbours
@@ -487,7 +501,7 @@ def export_zone(obj, depsgraph):
 def get_curve_points(children, depsgraph):
     points_world = []
     for child in children:
-        if child.type != 'CURVE':
+        if child.type != "CURVE":
             continue
 
         # Evaluate the curve so resolution_u is applied
@@ -505,7 +519,7 @@ def get_curve_points(children, depsgraph):
 # json serializer
 def dump_compact(obj):
     # separators=(',', ':') removes spaces after commas and colons, producing a completely minified string
-    return json.dumps(obj, separators=(',', ':'))
+    return json.dumps(obj, separators=(",", ":"))
 
 
 def get_collections(obj):
@@ -528,39 +542,51 @@ def get_collections(obj):
 
     return names
 
+
 # collection filters
 def is_entity(obj):
-    if obj.type != 'MESH' and obj.type != 'CURVE':
+    if obj.type != "MESH" and obj.type != "CURVE":
         return False
-    return 'entities' in get_collections(obj)    
+    return "entities" in get_collections(obj)
+
 
 def is_zone(obj):
-    if obj.type != 'MESH':
+    if obj.type != "MESH":
         return False
-    return 'zones' in get_collections(obj)
+    return "zones" in get_collections(obj)
+
 
 def is_world(obj):
-    if obj.type != 'MESH':
+    if obj.type != "MESH":
         return False
-    return 'worlds' in get_collections(obj)
+    return "worlds" in get_collections(obj)
+
 
 def is_collision(obj):
-    if obj.type != 'MESH':
+    if obj.type != "MESH":
         return False
-    return 'collisions' in get_collections(obj)
+    return "collisions" in get_collections(obj)
 
-def is_camera(obj):   
-    if obj.type != 'CAMERA' and obj.type != 'CURVE':
+
+def is_camera(obj):
+    if obj.type != "CAMERA" and obj.type != "CURVE":
         return False
-    return 'cameras' in get_collections(obj)
+    return "cameras" in get_collections(obj)
+
 
 # main
 def export_scene(context):
     print("export_scene")
-    
+
     start_time = time.perf_counter()
     depsgraph = bpy.context.evaluated_depsgraph_get()
-    scene_data = {"meshes": [], "zones": [], "entities": [], "cameras": [],  "cam_curves": []}
+    scene_data = {
+        "meshes": [],
+        "zones": [],
+        "entities": [],
+        "cameras": [],
+        "cam_curves": [],
+    }
 
     blend_path = bpy.data.filepath
     if not blend_path:
@@ -568,7 +594,7 @@ def export_scene(context):
 
     world_meshes_by_collection = {}
     world_skybox_by_collection = {}
-    
+
     for obj in bpy.data.objects:
         if is_entity(obj):
             scene_data["entities"].append(export_entity(obj, depsgraph))
@@ -580,45 +606,45 @@ def export_scene(context):
             if data is not None:
                 world_meshes_by_collection[collection_key].append(data)
             continue
-        
+
         if is_zone(obj):
             data = export_zone(obj, depsgraph)
             if data is not None:
                 scene_data["zones"].append(data)
             continue
-        
+
         if is_world(obj):
             collections = get_collections(obj)
             collection_key = collections[0] if collections else "default"
-            
+
             if collection_key not in world_meshes_by_collection:
                 world_meshes_by_collection[collection_key] = []
                 world_skybox_by_collection[collection_key] = False
 
-            if hasattr(obj, 'world_props') and obj.world_props.skybox:
+            if hasattr(obj, "world_props") and obj.world_props.skybox:
                 world_skybox_by_collection[collection_key] = True
-            
+
             data = export_mesh(obj, depsgraph, "world")
             if data is not None:
                 world_meshes_by_collection[collection_key].append(data)
             continue
-        
+
         if is_collision(obj):
             data = export_mesh(obj, depsgraph, "collision")
             if data is not None:
                 scene_data["meshes"].append(data)
             continue
-        
+
         if is_camera(obj):
-            if obj.type == 'CAMERA':
+            if obj.type == "CAMERA":
                 scene_data["cameras"].append(export_camera(obj))
                 continue
-            if obj.type == 'CURVE':
+            if obj.type == "CURVE":
                 curve_data = export_camera_curve(obj, depsgraph)
                 if curve_data is not None:
                     scene_data["cam_curves"].append(curve_data)
                     continue
-                
+
         print(f"excluded object {obj}")
 
     # Add grouped world meshes to scene_data
@@ -637,11 +663,11 @@ def export_scene(context):
     output_path = f"//{blend_name}_export.json"
 
     abs_path = bpy.path.abspath(output_path)
-    with open(abs_path, 'w', encoding='utf-8') as f:
+    with open(abs_path, "w", encoding="utf-8") as f:
         f.write(dump_compact(scene_data))
 
     end_time = time.perf_counter()
-    mesh_count   = len(scene_data["meshes"])
+    mesh_count = len(scene_data["meshes"])
     camera_count = len(scene_data["cameras"])
     print(f"[INFO] Export complete → {abs_path} in {(end_time-start_time):0.3f}s")
     print(f"       {mesh_count} mesh(es), {camera_count} camera(s) written.")
