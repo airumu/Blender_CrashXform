@@ -389,6 +389,12 @@ class WorldProps(PropertyGroup):
         description="Mark this world mesh as a skybox",
         default=False
     )
+
+    texture_group: StringProperty(
+        name="TexGr",
+        description="Texture group for this world mesh",
+        default=""
+    )
     
     fill: BoolProperty(
         name="Fill",
@@ -1390,11 +1396,15 @@ class CXF_PT_world_properties(Panel):
 
         row = layout.row()
         row.enabled = is_world
+        row.prop(obj.world_props, "texture_group")
+        
+        row = layout.row()
+        row.enabled = is_world
         row.prop(obj.world_props, "skybox")
         
         row = layout.row()
         row.enabled = is_coll
-        row.prop(obj.world_props, "fill")        
+        row.prop(obj.world_props, "fill")
 
 # Execute
 

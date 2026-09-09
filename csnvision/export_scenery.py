@@ -200,15 +200,18 @@ def export_mesh(obj, depsgraph, exp_type):
         "faces": faces,
     }
 
-    if is_world(obj) and hasattr(obj, "world_props") and obj.world_props.skybox:
-        result["skybox"] = True
+    if is_world(obj):
+        texture_group = getattr(getattr(obj, "world_props", None), "texture_group", "")
+        result["texture_group"] = texture_group
+        if hasattr(obj, "world_props") and obj.world_props.skybox:
+            result["skybox"] = True
     if is_collision(obj) and hasattr(obj, "world_props") and obj.world_props.fill:
         result["fill"] = True
 
     return result
 
 
-def merge_meshes(mesh_list, collection_name, skybox=False):
+def merge_meshes(mesh_list, collection_name):
     """Merge multiple mesh exports into a single mesh."""
     if not mesh_list:
         return None
@@ -216,6 +219,7 @@ def merge_meshes(mesh_list, collection_name, skybox=False):
     merged_verts = []
     merged_faces = []
     vertex_offset = 0
+    merged_skybox = False
 
     for mesh_data in mesh_list:
         # Add vertices
@@ -227,16 +231,27 @@ def merge_meshes(mesh_list, collection_name, skybox=False):
             adjusted_face["verts"] = [v + vertex_offset for v in adjusted_face["verts"]]
             merged_faces.append(adjusted_face)
 
+        if mesh_data.get("skybox", False):
+            merged_skybox = True
+
         vertex_offset += len(mesh_data["verts"])
+
+    texture_group = ""
+    for mesh_data in mesh_list:
+        candidate = mesh_data.get("texture_group", "")
+        if candidate:
+            texture_group = candidate
+            break
 
     result = {
         "type": "world",
         "name": collection_name,
         "verts": merged_verts,
         "faces": merged_faces,
+        "texture_group": texture_group,
     }
 
-    if skybox:
+    if merged_skybox:
         result["skybox"] = True
 
     return result
@@ -593,7 +608,6 @@ def export_scene(context):
         raise RuntimeError("The .blend file has not been saved yet.")
 
     world_meshes_by_collection = {}
-    world_skybox_by_collection = {}
 
     for obj in bpy.data.objects:
         if is_entity(obj):
@@ -601,7 +615,6 @@ def export_scene(context):
             collection_key = "entity_mesh_řäї"
             if collection_key not in world_meshes_by_collection:
                 world_meshes_by_collection[collection_key] = []
-                world_skybox_by_collection[collection_key] = False
             data = export_mesh(obj, depsgraph, "entity")
             if data is not None:
                 world_meshes_by_collection[collection_key].append(data)
@@ -619,10 +632,6 @@ def export_scene(context):
 
             if collection_key not in world_meshes_by_collection:
                 world_meshes_by_collection[collection_key] = []
-                world_skybox_by_collection[collection_key] = False
-
-            if hasattr(obj, "world_props") and obj.world_props.skybox:
-                world_skybox_by_collection[collection_key] = True
 
             data = export_mesh(obj, depsgraph, "world")
             if data is not None:
@@ -650,12 +659,11 @@ def export_scene(context):
     # Add grouped world meshes to scene_data
     for collection_name, meshes in world_meshes_by_collection.items():
         if meshes:
-            skybox = world_skybox_by_collection.get(collection_name, False)
             if collection_name == "worlds":
                 for mesh in meshes:
                     scene_data["meshes"].append(mesh)
             else:
-                merged = merge_meshes(meshes, collection_name, skybox=skybox)
+                merged = merge_meshes(meshes, collection_name)
                 if merged is not None:
                     scene_data["meshes"].append(merged)
 
