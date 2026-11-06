@@ -21,10 +21,10 @@ from . import export_scenery
 importlib.reload(export_scenery)
 
 DEFAULT_ID = 10
-MAX_ARGS = 12
-MAX_VICTIMS = 8
+MAX_ARGS = 50
+MAX_VICTIMS = 1000
 MAX_CAMERAS = 5
-MAX_NEIGHBOURS = 8
+MAX_NEIGHBOURS = 16
 
 def make_prop_hex_getter(field, mask=0xFFFFFFFF):
     def getter(self):
