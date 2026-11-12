@@ -656,6 +656,23 @@ for i in range(MAX_CAMERAS):
         get=make_camera_hex_getter(i, "distance"),
         set=make_camera_hex_setter(i, "distance")
     )
+    CameraElements.__annotations__[f"distance_distrib_enabled_{i}"] = BoolProperty(
+        name="Distance Distrib",
+        description="Specify distance distribution",
+        default=False
+    )
+    CameraElements.__annotations__[f"distance_distrib_value_{i}"] = IntProperty(
+        name="",
+        description="Distance distribution",
+        default=0x100,
+        min=0
+    )
+    CameraElements.__annotations__[f"distance_distrib_hex_{i}"] = StringProperty(
+        name="",
+        description="Distance distribution",
+        get=make_camera_hex_getter(i, "distance_distrib"),
+        set=make_camera_hex_setter(i, "distance_distrib")
+    )
     
     # Spacing
     CameraElements.__annotations__[f"spacing_enabled_{i}"] = BoolProperty(
@@ -1095,6 +1112,14 @@ class CXF_PT_camera(Panel):
         sub.enabled = getattr(obj.camera_elements, f"distance_enabled_{i}")
         sub.prop(obj.camera_elements, f"distance_hex_{i}" if show_hex else f"distance_value_{i}")
         op = row.operator("csn.apply_cam_distance", text="", icon='COPYDOWN', emboss=False)
+
+        # distance distrib
+        row = col.row(align=True)
+        row.prop(obj.camera_elements, f"distance_distrib_enabled_{i}")
+        sub = row.column()
+        sub.enabled = getattr(obj.camera_elements, f"distance_distrib_enabled_{i}")
+        sub.prop(obj.camera_elements, f"distance_distrib_hex_{i}" if show_hex else f"distance_distrib_value_{i}")
+        op = row.operator("csn.apply_cam_distance_distrib", text="", icon='COPYDOWN', emboss=False)
         
         # Panning
         row = col.row(align=True)
@@ -1913,6 +1938,8 @@ class CXF_OT_copy_cam_props(Operator):
                 "panningy":              getattr(cam, f"Panningy_value_{i}") & 0xFFFFFFFF,
                 "distance_enabled":      getattr(cam, f"distance_enabled_{i}"),
                 "distance":              getattr(cam, f"distance_value_{i}") & 0xFFFFFFFF,
+                "distance_distrib_enabled": getattr(cam, f"distance_distrib_enabled_{i}"),
+                "distance_distrib":      getattr(cam, f"distance_distrib_value_{i}") & 0xFFFFFFFF,
                 "spacing_enabled":       getattr(cam, f"spacing_enabled_{i}"),
                 "spacing":               getattr(cam, f"spacing_{i}"),
                 "fog_distance_enabled":  getattr(cam, f"fog_distance_enabled_{i}"),
@@ -2025,6 +2052,7 @@ class CXF_OT_apply_cam_property(Operator):
 _APPLY_WRAPPERS = [
     ("mode", "mode"),
     ("distance", "distance_enabled,distance_hex,distance_value"),
+    ("distance_distrib", "distance_distrib_enabled,distance_distrib_hex,distance_distrib_value"),
     ("panning", "Panning_enabled,Panningx_value,Panningx_hex,Panningy_value,Panningy_hex"),
     ("interpolate", "interpolate"),
     ("spacing", "spacing_enabled,spacing,spacing_hex"),
@@ -2114,6 +2142,8 @@ class CXF_OT_paste_cam_props(Operator):
                     setattr(cam, f"Panningy_value_{i}",        uint32_to_int32(cp.get("panningy", 0x40)))
                     setattr(cam, f"distance_enabled_{i}",      cp.get("distance_enabled", False))
                     setattr(cam, f"distance_value_{i}",        uint32_to_int32(cp.get("distance", 0x600)))
+                    setattr(cam, f"distance_distrib_enabled_{i}", cp.get("distance_distrib_enabled", False))
+                    setattr(cam, f"distance_distrib_value_{i}", max(0, uint32_to_int32(cp.get("distance_distrib", 0))))
                     setattr(cam, f"spacing_enabled_{i}",       cp.get("spacing_enabled", False))
                     setattr(cam, f"spacing_{i}",               cp.get("spacing", 200))
                     setattr(cam, f"fog_distance_enabled_{i}",  cp.get("fog_distance_enabled", False))

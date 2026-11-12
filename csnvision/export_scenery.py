@@ -305,6 +305,7 @@ def export_camera_info(obj):
     for i in range(count):
         enabled_panning = getattr(obj.camera_elements, f"Panning_enabled_{i}", False)
         enabled_distance = getattr(obj.camera_elements, f"distance_enabled_{i}", False)
+        enabled_distance_distrib = getattr(obj.camera_elements, f"distance_distrib_enabled_{i}", False)
         enabled_spacing = getattr(obj.camera_elements, f"spacing_enabled_{i}", False)
         enabled_water = getattr(obj.camera_elements, f"water_enabled_{i}", False)
         enabled_mirror = getattr(obj.camera_elements, f"mirror_enabled_{i}", False)
@@ -322,6 +323,7 @@ def export_camera_info(obj):
         panningx_val = getattr(obj.camera_elements, f"Panningx_value_{i}", 0)
         panningy_val = getattr(obj.camera_elements, f"Panningy_value_{i}", 0)
         distance_val = getattr(obj.camera_elements, f"distance_value_{i}", 0)
+        distance_distrib_val = getattr(obj.camera_elements, f"distance_distrib_value_{i}", 0)
         spacing_val = getattr(obj.camera_elements, f"spacing_{i}", 0)
         water_target = getattr(obj.camera_elements, f"water_target_{i}", "")
         mirror_target = getattr(obj.camera_elements, f"mirror_target_{i}", "")
@@ -367,6 +369,7 @@ def export_camera_info(obj):
                 "panningx": panningx_val & 0xFFFFFFFF if enabled_panning else None,
                 "panningy": panningy_val & 0xFFFFFFFF if enabled_panning else None,
                 "distance": distance_val & 0xFFFFFFFF if enabled_distance else None,
+                "distance_distrib": distance_distrib_val & 0xFFFFFFFF if enabled_distance_distrib else None,
                 "spacing": spacing_val if enabled_spacing else None,
                 "water": water_target if enabled_water else None,
                 "mirror": mirror_target if enabled_mirror else None,
